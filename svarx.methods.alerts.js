@@ -7,8 +7,10 @@
             msg = '';
             err = $(this).data('ERRORS') || {};
         },
-        after: function() {
-            window.alert(msg);
+        after: function(e, isValid) {
+            if (!isValid) {
+                window.alert(msg);
+            }
         },
         error: function(e, id) {
             if (err[id] !== undefined) {

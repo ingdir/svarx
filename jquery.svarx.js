@@ -1,8 +1,8 @@
 //
 // @author         Max A. Shirshin (ingdir@yandex-team.ru)
-// @version        1.20
-// @name           SVARX web form validator (based on jQuery)
-// @description    Automated form validation using SVARX format (Simple VAlidation Rulesets in XML)
+// @version        1.21
+// @name           SVARX (Semantical VAlidation Rulesets in Xml) jQuery plugin
+// @description    jQuery plugin to validate Web forms using SVARX
 //
 
 (function($) {
@@ -12,10 +12,18 @@
         undefined;
     
     function applyRules(form, rule) {
+        var forAttr = rule.getAttribute('for'),
+            typeAttr = rule.getAttribute('type');
+
+        if (!forAttr || !typeAttr) {
+            // имеем дело с невалидным тегом rule
+            return true;
+        }
+        
         // Определяем набор элементов, переданных для валидации
         // (некоторые правила могут принимать на вход более одного элемента).
-        var fieldList = $(rule).attr('for').split(/\s+/),
-            typeList = $(rule).attr('type').split(/\s+/),
+        var fieldList = forAttr.split(/\s+/),
+            typeList = typeAttr.split(/\s+/),
             els = [],
             allEmpty = true,
             check = true;
@@ -33,6 +41,7 @@
 
         // Специальный случай: не найдено ни одного существующего элемента формы.
         // В этом случае SVARX-валидация считает проверку истинной.
+        // Здесь же хитро отваливаются if-блоки для несуществующих элементов.
         if (els.length == 0) {
             return true;
         }
@@ -67,10 +76,27 @@
         return check;
     }
     
-    // Ф-ция нужна, чтобы отфильтровать узлы в порядке документа.
-    // Использование .children('rule,block') даёт js-ошибку в IE7
-    function filterTags() {
-        return (this.nodeName == 'rule' || this.nodeName == 'block');
+    function filterTags(root) {
+        var result = [],
+            i = 0,
+            j,
+            ch = root.childNodes;
+        
+        while (ch[i]) {
+            j = 1;
+            while (arguments[j]) {
+                if (ch[i].nodeName === arguments[j]) {
+                    result.push(ch[i]);
+                    break;
+                }
+
+                j++;
+            }
+            
+            i++;
+        }
+
+        return result;
     }
    
     // препроцессор XML, разворачивает if-проверки в логические связки
@@ -79,60 +105,62 @@
         // обрабатывает узлы block, заменяя if-блоки по правилу
         // A => B = !A or B
         function preprocessNode(node) {
-            if (node.getAttribute('logic') == 'if') {
-                var chNodes = $(node).children().filter(filterTags);
+            if (node.getAttribute('logic') === 'if') {
+                var chNodes = filterTags(node, 'rule', 'block');
+                
                 // if..then или if..then..else
-                if (chNodes.size() == 2 || chNodes.size() == 3) {
+                if (chNodes.length == 2 || chNodes.length == 3) {
                     node.setAttribute('logic', 'or');
                     
-                    var conditionElement = $(node).children().filter(filterTags).get(0);
-                    if (isInverted(conditionElement)) {
-                        conditionElement.removeAttribute('inverted');
+                    if (isInverted(chNodes[0])) {
+                        chNodes[0].removeAttribute('inverted');
                     } else {
-                        conditionElement.setAttribute('inverted', 'inverted');
+                        chNodes[0].setAttribute('inverted', 'inverted');
                     }
                 }
                 
                 // дополнительная обработка для случая if..then..else
-                if (chNodes.size() == 3) {
+                if (chNodes.length == 3) {
                     var dupNode = node.cloneNode(true),
-                        dupChNodes = $(dupNode).children().filter(filterTags),
-                        dupConditionElement = dupChNodes.get(0);
-                    if (isInverted(dupConditionElement)) {
-                        dupConditionElement.removeAttribute('inverted');
+                        dupChNodes = filterTags(dupNode, 'rule', 'block');
+                        
+                    if (isInverted(dupChNodes[0])) {
+                        dupChNodes[0].removeAttribute('inverted');
                     } else {
-                        dupConditionElement.setAttribute('inverted', 'inverted');
+                        dupChNodes[0].setAttribute('inverted', 'inverted');
                     }
-                    $(node).after(dupNode);
+                    
+                    dupNode = node.parentNode.insertBefore(dupNode, node.nextSibling);
                     
                     // из первого набора условий убрать третий узел
-                    var condemned = chNodes.get(2);
+                    var condemned = chNodes[2];
                     condemned.parentNode.removeChild(condemned);
                     // из второго набора удаляем второй узел
-                    condemned = dupChNodes.get(1);
+                    condemned = dupChNodes[1];
                     condemned.parentNode.removeChild(condemned);
                     
                     // объединить полученные узлы логикой and
                     var wrapper = tree.createElement('block');
                     wrapper.setAttribute('logic', 'and');
-                    $(node).before(wrapper);
+                    wrapper = node.parentNode.insertBefore(wrapper, node);
                     wrapper.appendChild(node);
                     wrapper.appendChild(dupNode);
                     
-                    $(dupNode).children('block').each(function() {
-                        preprocessNode(this);
-                    });
+                    for (var i = 0, blocks = filterTags(dupNode, 'block'), j = blocks.length; i < j; i++) {
+                        preprocessNode(blocks[i]);
+                    }
                 }
             }
             
-            $(node).children('block').each(function() {
-                preprocessNode(this);
-            });
+            for (var i = 0, blocks = filterTags(node, 'block'), j = blocks.length; i < j; i++) {
+                preprocessNode(blocks[i]);
+            }
         }
         
-        $('svarx > validate:first', tree).each(function() {
-            preprocessNode(this);
-        });
+        var validateElem = filterTags(tree.documentElement, 'validate');
+        if (validateElem[0]) {
+            preprocessNode(validateElem[0]);
+        }
     }
     
     // Назначает валидатор на форму
@@ -230,46 +258,47 @@
         // общий логический итог проверки и расставляет на XML-дереве
         // маркеры для выполнения назначенных на ошибки действий
         function processRule(ruleNode) {
-            var nodename = ruleNode.nodeName;
-            
-            if (nodename == 'rule') {
-                var ruleCheck = applyRules(form, ruleNode);
-                logicStack.push(ruleCheck);
+            switch (ruleNode.nodeName) {
+                case 'rule':
+                    var ruleCheck = applyRules(form, ruleNode);
+                    logicStack.push(ruleCheck);
                 
-                if (!ruleCheck) {
-                    // ставим маркер выполнения действий для оповещения об ошибке
-                    ruleNode.setAttribute('fireActs', 1);
-                }
-            } else if (nodename == 'block' || nodename == 'validate') {
-                var childCount = $(ruleNode).children().filter(filterTags).size(),
-                    logic = '&&';
-    
-                if (ruleNode.getAttribute('logic') == 'or') {
-                    logic = '||';
-                }
+                    if (!ruleCheck) {
+                        // ставим маркер выполнения действий для оповещения об ошибке
+                        ruleNode.setAttribute('fireActs', 1);
+                    }
+
+                    break;
+
+                case 'block':
+                case 'validate':
+                    var ch = filterTags(ruleNode, 'rule', 'block'),
+                        childCount = ch.length,
+                        logic = ruleNode.getAttribute('logic') == 'or' ? '||' : '&&';
+
+                        for (var i = 0; i < childCount; i++) {
+                            // рекурсивный вызов
+                            processRule(ch[i]);
+                        }
                 
-                //////////// рекурсивный вызов ///////////////////////////////
-                $(ruleNode).children().filter(filterTags).each(function(){
-                    processRule(this);
-                });
-                //////////////////////////////////////////////////////////////
+                    var tmps = [];
+                    for (var i = 0; i < childCount; i++) {
+                        tmps.unshift(logicStack.pop());
+                    }
                 
-                var tmps = [];
-                for (var i = 0; i < childCount; i++) {
-                    tmps.unshift(logicStack.pop());
-                }
-                
-                var thisRuleResult = (childCount > 0) ? eval('(' + tmps.join(logic) + ')') : true;
-                if (isInverted(ruleNode)) {
-                    thisRuleResult = !thisRuleResult;
-                }
-                
-                // запоминаем логический результат вычисления текущего набора правил
-                logicStack.push(thisRuleResult);
-                if (!thisRuleResult) {
-                    // ставим маркер выполнения действий для оповещения об ошибке
-                    ruleNode.setAttribute('fireActs', 1);
-                }
+                    var thisRuleResult = (childCount > 0) ? eval('(' + tmps.join(logic) + ')') : true;
+                    if (isInverted(ruleNode)) {
+                        thisRuleResult = !thisRuleResult;
+                    }
+                    
+                    // запоминаем логический результат вычисления текущего набора правил
+                    logicStack.push(thisRuleResult);
+                    if (!thisRuleResult) {
+                        // ставим маркер выполнения действий для оповещения об ошибке
+                        ruleNode.setAttribute('fireActs', 1);
+                    }
+
+                    break;
             }
         }
         
@@ -278,6 +307,9 @@
         function fireActions(ruleNode) {
             if (ruleNode.getAttribute('fireActs')) {
                 var nodename = ruleNode.nodeName;
+
+                ruleNode.removeAttribute('fireActs');
+
                 if (nodename == 'rule' || nodename == 'block' || nodename == 'validate') {
                     var errCode = $(ruleNode).attr('onerror'),
                         forNode = ($(ruleNode).attr('for') || '').split(/\s+/),
@@ -295,48 +327,42 @@
                         });
                     }
     
-                    if (nodename != 'rule') {
-                        ///////// рекурсивный вызов //////////////////////////////////
-                        $(ruleNode).children().filter(filterTags).each(function(){
-                            fireActions(this);
-                        });
-                        //////////////////////////////////////////////////////////////
+                    if (nodename !== 'rule') {
+                        // рекурсивный вызов
+                        for (var i = 0, ch = filterTags(ruleNode, 'block', 'rule'), j = ch.length; i < j; i++) {
+                            fireActions(ch[i]);
+                        }
                     }
                 }
             }
         }
 
         // Общий результат валидации формы и стек результатов проверок
-        var result = true, logicStack = [];
-        // корневой block должен быть один, но мы делаем each на случай его полного отсутствия
-        $('svarx > validate:first', $(form).data('svarxXML')).each(function() {
-            processRule(this);
-        });
+        var result = true,
+            logicStack = [],
+            validateElems = filterTags($(form).data('svarxXML').documentElement, 'validate');
+
+        if (validateElems[0]) {
+            processRule(validateElems[0]);
+        }
         
         result = logicStack.pop();
-        
         if (!result) {
-            $('svarx > validate:first', $(form).data('svarxXML')).each(function() {
-                fireActions(this);
-            });
-            
-            // очищаем все флаги, чтобы они не мешали следующей валидации
-            $('*', $(form).data('svarxXML')).removeAttr('fireActs');
+            if (validateElems[0]) {
+                fireActions(validateElems[0]);
+            }
         }
 
         return result;
     }
     
     function isInverted(rule) {
-        var $rule = $(rule),
-            attr = $rule.attr('inverted');
-        
-        if (attr === undefined) {
+        var attr = rule.getAttribute('inverted');
+        if (attr === null) {
             return false;
         }
-        
-        attr = attr.toLowerCase();
-        return (attr == 'yes' || attr == 'inverted' || attr == '1');
+
+        return (attr === 'inverted' || attr === 'yes' || attr === '1');
     }
     
     // Внешний интерфейс
