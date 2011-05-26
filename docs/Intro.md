@@ -44,5 +44,5 @@ SVARX-файл имеет следующую структуру (пример):
             <el name="newpasswd" />
         </rule>
     </validate>
-/svarx>
+</svarx>
 ```
