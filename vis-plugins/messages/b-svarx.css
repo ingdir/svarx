@@ -1,0 +1,11 @@
+.b-svarx__err
+{
+     font-weight: bold;
+
+     color: #b00;
+}
+
+.b-svarx__err_visible_no
+{
+    display: none;
+}
