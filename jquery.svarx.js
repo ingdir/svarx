@@ -1,7 +1,7 @@
 /**
  *
  * @author         Max A. Shirshin (ingdir@yandex-team.ru)
- * @version        2.1
+ * @version        2.2
  * @name           SVARX (Semantical VAlidation Rulesets in XML)
  * @description    jQuery plugin for web form validation using SVARX rule descriptions
  * 
@@ -72,14 +72,13 @@
              * Внешние алиасы для нахождения элементов формы
              */
             function $ruleEls(rule) {
-                return $elsByRule(rule, 1);
+                return $elsByRule(rule, 'element');
             }
 
             function $targetEls(rule) {
-                // спецсоглашение -- errtarget с пустым значением есть форма
                 if (rule.getAttribute('errtarget') !== null || filterTags(rule, 'errtarget').length > 0) {
-                    return $elsByRule(rule, 2);
-                } else return $elsByRule(rule, 1);
+                    return $elsByRule(rule, 'errtarget');
+                } else return $elsByRule(rule, 'element');
             }
 
             // базовая фция поиска элементов в форме
@@ -108,12 +107,14 @@
                         return $cached;
                     }
                 }
-
-                var context = (contextId == 1) ? {
+                
+                //if (rule.getAttribute('onerror') == 'bad_punctuation') debugger;
+                
+                var context = (contextId == 'element') ? {
                         nameAttr: 'for',
                         itemAttr: 'item',
                         childTag: 'el'
-                    } : {
+                    } : {  // contextId == 'errtarget'
                         nameAttr: 'errtarget',
                         itemAttr: 'errtargetitem',
                         childTag: 'errtarget'
@@ -130,8 +131,7 @@
                     // или мы имеем дело с отсутствием привязки к элементу вообще, тогда надо
                     // отдавать ссылку на базовую форму.
                     //
-                    // Это позволяет использовать конструкции вида errtarget="" для указания того,
-                    // что ошибка должна происходить на самой форме.
+                    // Невалидный errtarget приведёт к возникновению ошибки на форме
                     // 
                     var childTags = filterTags(rule, context.childTag);
                     
@@ -139,10 +139,31 @@
                         // имеем дело с мультиэлементным правилом.
                         // парсим внутренности.
                         $.each(childTags, function(i, el) {
-                            fieldList.push([
-                                el.getAttribute('name'),
-                                extParseInt(el.getAttribute('item'), 0)  // по умолчанию берём первый элемент
-                            ]);
+                            // обрабатываем алиасы.
+                            // это нужно делать только для контекста вызова errtarget
+                            var alias = el.getAttribute('alias');
+                            if (alias && contextId == 'errtarget') {
+                                switch (alias) {
+                                    case 'children':
+                                    // берём все теги rule и для каждого вычисляем его errtargets,
+                                    // заносим их сразу в $result
+                                    $.each(filterTags(rule, TAG_RULE), function(i, el) {
+                                        $result = $result.add( $targetEls(el) );
+                                    });
+                                    break;
+
+                                    // объект, на котором случится ошибка - сама форма
+                                    case 'form':
+                                    default:
+                                    fieldList.push([undefined, 0]);
+                                    break;
+                                }
+                            } else {
+                                fieldList.push([
+                                    el.getAttribute('name'),
+                                    extParseInt(el.getAttribute('item'), 0)  // по умолчанию берём первый элемент
+                                ]);
+                            }
                         });                        
                     } else {
                         // в дальнейшем при итерации элемент, у которого
@@ -355,7 +376,7 @@
                     op.immutable || resetElsCaches();
                     // препроцессинг уже можно выполнять
                     preprocess();
-                    validationResult = validate();
+                    validationResult = validate(e.type);
                     
                     $form
                        .one('aftersvarx', checkPrevented)
@@ -410,7 +431,7 @@
             }
 
             // Главная валидирующая функция
-            function validate() {
+            function validate(eventType) {
                 // Рекурсивный обработчик правил валидации, вычисляет
                 // общий логический итог проверки и расставляет на XML-дереве
                 // маркеры для выполнения назначенных на ошибки действий
@@ -474,7 +495,7 @@
                         // вызываем ошибку только если onerror был определён
                         if (errCode) {
                             // поддержка переопределения таргета ошибки
-                            $targetEls(ruleNode).trigger('svarxerror', [errCode]);
+                            $targetEls(ruleNode).trigger('svarxerror', [errCode, eventType]);
                         }
         
                         if (nodename !== TAG_RULE) {
@@ -549,7 +570,7 @@
 
     $.extend(SVARX, {
         // версия библиотеки
-        version: 2.1,
+        version: 2.2,
         options: {
             method: undefined,  // имя плагина визуализации валидации
             bindTo: 'submit',  // на какое событие по умолчанию назначаем валидацию

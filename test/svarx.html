@@ -1,0 +1,346 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<title></title>
+<style type="text/css">
+.svarx
+{
+    display: none;
+}
+</style>
+<script src="http://yandex.st/jquery/1.4.4/jquery.min.js"></script>
+<script src="../jquery.svarx.js"></script>
+<script src="../vis-plugins/debug/svarx.methods.debug.js"></script>
+<script>
+$(function() {
+    function xml(id) {
+        var xml = '<?xml version="1.0" encoding="UTF-8"?>' + $('#' + id).val();
+
+        if ($.browser.msie) {
+            var xmlDoc = new ActiveXObject("Microsoft.XMLDOM");
+            xmlDoc.async = false;
+            xmlDoc.loadXML(xml);
+            return xmlDoc;
+        } else return new DOMParser().parseFromString(xml, 'application/xml');
+    }
+    
+    if (!window.console) {
+        window.console = {
+            __noSuchMethod__: function(){}
+        };
+    } else {
+        if ($.browser.msie) {
+            window.console.groupEnd = window.console.group = function(){};
+            window.console._timers = {};
+            window.console.time = function(id) {
+                window.console._timers[id] = new Date().getTime();
+            };
+            window.console.timeEnd = function(id) {
+               if (window.console._timers[id]) {
+                   window.console.log(id + ': ' + (new Date().getTime() - window.console._timers[id]) + 'ms');
+               }
+            };
+        }
+    }
+    
+    // config    
+    $.fn.svarx.options.method = 'debug';
+    $.fn.svarx.options.bindTo = 'submit test';
+    $.fn.svarx.options.immutable = true;
+    $.fn.svarx.options.debugMode = true;
+
+    var t = $.fn.svarx.methods.debug.expect;
+    // test 1
+    function val1() { 
+        $('form')
+            .one('svarxloaded', function() {
+                this.reset();
+                var $f = $(this);
+    
+                t.msg = ['total', 'required1', 'required2'];
+                t.isValid = false;
+                
+                $f.trigger('test').trigger('submit');
+                
+                $f.find('input[name=text]').val('blah');
+                
+                t.msg = ['total', 'email1', 'email2'];
+                $f.trigger('test').trigger('submit');
+                    
+                t.isValid = true;
+                t.msg = [];
+                $f
+                    .find('input[name=text]')
+                    .val('max@shirshin.com')
+                    .trigger('test submit');
+            })
+            .svarx({svarxXML: xml('simple')});
+    }
+
+    console.log('SVARX version:', $.fn.svarx.version);
+    console.group('simple');
+    val1();
+    console.groupEnd('simple');
+    
+    console.group('simple - second time');
+    val1();
+    console.groupEnd('simple - second time');
+
+    console.group('if-then-else');
+    $('form')
+        .one('svarxloaded', function() {
+            this.reset();
+            var $f = $(this);
+
+            t.msg = ['total', 'required2'];
+            t.isValid = false;
+            
+            $f.trigger('submit').trigger('test');
+            
+            $f
+                .find('input[name=checkbox]')
+                .eq(0)
+                .attr('checked', 'checked');
+                        
+            t.msg = ['total', 'required1'];
+            t.isValid = false;
+            $f
+                .trigger('submit')
+                .trigger('test');
+                
+            $f.find('input[name=text]').eq(0).val('pipa');
+            t.msg = ['total', 'required1'];
+            t.isValid = false;
+            $f.trigger('submit').trigger('test');
+            
+            $f.find('input[name=text]').eq(1).val('pipa');
+            t.msg = [];
+            t.isValid = true;
+            $f.trigger('submit').trigger('test');
+        })
+        .svarx({svarxXML: xml('ifthenelse')});
+    console.groupEnd('if-then-else');
+    
+    console.group('selects');
+    $('form')
+        .one('svarxloaded', function() {
+            this.reset();
+            var $f = $(this);
+
+            t.msg = ['total', 'regexp-error', 'selected-error', 'multiple-error', 'multiple-error-2'];
+            t.isValid = false;
+            $f.trigger('submit').trigger('test');
+            
+            var sel = $f.find('select[name="select-single"]').get(0),
+                selM = $f.find('select[name="select-multiple"]').get(0);
+            
+            sel.selectedIndex = 1;
+            selM.options[0].selected = true;
+            selM.options[1].selected = true;
+                        
+            t.msg = [];
+            t.isValid = true;
+            $f
+                .trigger('submit')
+                .trigger('test');
+                
+            sel.selectedIndex = 4;  // item #5 but value === 2
+            t.msg = ['total', 'selected-error'];
+            t.isValid = false;
+            $f
+                .trigger('submit')
+                .trigger('test');
+            
+            
+            selM.options[0].selected = false;
+            t.msg = ['total', 'selected-error', 'multiple-error'];
+            t.isValid = false;
+            
+            $f
+                .trigger('submit')
+                .trigger('test');
+
+        })
+        .svarx({svarxXML: xml('selects')});
+    console.groupEnd('selects');
+
+    console.group('combined');
+    $('form')
+        .one('svarxloaded', function() {
+            this.reset();
+            var $f = $(this);
+
+            t.msg = ['req', 'req', 'req'];
+            t.isValid = false;
+            $f.trigger('submit').trigger('test');
+            
+            var $inputs = $f.find('input[name=text],input[name=password],textarea[name=textarea]').val(42);
+
+            t.msg = ['pipa', 'pipa', 'pipa', 'pipa'];
+            t.isValid = false;
+            $f.trigger('submit').trigger('test');
+
+            $inputs.eq(1).val('pipa');
+            t.msg = ['pipa', 'pipa', 'pipa'];
+            t.isValid = false;
+            $f.trigger('submit').trigger('test');
+
+            $inputs.eq(2).val('pipa');
+            t.msg = ['pipa', 'pipa'];
+            t.isValid = false;
+            $f.trigger('submit').trigger('test');
+
+            $inputs.eq(3).val('pipa');
+            t.msg = ['pipa'];
+            t.isValid = false;
+            $f.trigger('submit').trigger('test');
+
+            t.msg = [];
+            t.isValid = true;
+            $inputs.filter('input').val('pipa');
+            $inputs.filter('textarea').val('');
+            $f.trigger('submit').trigger('test');
+
+        })
+        .svarx({svarxXML: xml('combined')});
+    console.groupEnd('combined');
+
+    console.group('propagation');
+    $('form')
+        .one('svarxloaded', function() {
+            this.reset();
+            var $f = $(this);
+            
+            $f.find('input[name=text]').eq(1).val(42);
+
+            t.msg = ['propagated', 'propagated'];
+            t.isValid = false;
+            $f.trigger('submit').trigger('test');
+            
+        })
+        .svarx({svarxXML: xml('propagation')});
+    console.groupEnd('propagation');
+
+
+
+});
+</script>
+</head>
+<body>
+    <textarea id="simple" class="svarx">
+        <svarx>
+            <validate onerror="total">
+                <rule for="text" item="0" type="required" onerror="required1"/>
+                <rule for="text" item="1" type="required" onerror="required2"/>
+                <rule for="text" item="0" type="email" onerror="email1" />
+                <rule for="text" item="1" type="email" onerror="email2" />
+            </validate>
+        </svarx>
+    </textarea>
+
+    <textarea id="ifthenelse" class="svarx">
+        <svarx>
+            <validate onerror="total">
+                <block logic="if">
+                    <rule for="checkbox" type="checked" />
+                    
+                    <block onerror="required1">
+                        <rule for="text" item="0" type="required" />
+                        <rule for="text" item="1" type="required" />
+                    </block>
+                    
+                    <block onerror="required2">
+                        <errtarget name="textarea" item="0" />
+                        <rule type="required">
+                            <el name="text" item="1" />
+                        </rule>
+                    </block>
+                </block>
+            </validate>
+        </svarx>
+    </textarea>
+    
+    <textarea id="selects" class="svarx">
+        <svarx>
+            <validate onerror="total">
+                <rule for="select-single" type="regexp" match="2" onerror="regexp-error" />
+                <rule for="select-single" type="selected" option="1" onerror="selected-error" />
+                
+                <block logic="and" onerror="multiple-error">
+                    <rule for="select-multiple" type="selected" option="0" />
+                    <rule for="select-multiple" type="selected" option="1" onerror="multiple-error-2" />
+                </block>
+            </validate>
+        </svarx>
+    </textarea>
+
+    <textarea id="combined" class="svarx">
+        <svarx>
+            <validate>
+                <rule for="text" item="0" type="required" onerror="req" />
+                <rule for="text" item="1" type="required" onerror="req" />
+                <rule for="password" item="0" type="required" onerror="req" />
+                
+                <rule for="text" item="0" type="regexp" match="pipa" onerror="pipa" />
+                <rule for="text" item="1" type="regexp" match="pipa" onerror="pipa" />
+                <rule for="password" type="regexp" match="pipa" onerror="pipa" />
+                <rule for="textarea" type="regexp" match="pipa" onerror="pipa" />
+                
+            </validate>
+        </svarx>
+    </textarea>
+    
+    <textarea id="propagation" class="svarx">
+        <svarx>
+            <validate>
+                <block onerror="propagated">
+                    <errtarget name="password" />
+                    <errtarget name="hidden" />
+                    
+                    <block logic="if">
+                        <block logic="or">
+                            <rule for="text" item="1" type="required" />
+                            <rule for="hidden" type="required" />
+                        </block>
+                        <block>
+                            <rule for="text" item="0" type="required" />
+                        </block>
+                    </block>
+                
+                </block>
+            </validate>
+        </svarx>
+    </textarea>
+
+    <h1>Test SVARX</h1>
+    <form action="javascript:alert('submit')">
+        <label><input type="checkbox" name="checkbox" />&nbsp;Sample checkbox</label><br />
+        
+        Sample text: <input type="text" name="text" /><br />
+        Sample text 2:<input type="text" name="text" /><br />
+        <input type="password" name="password" /><br />
+        
+        <input type="hidden" name="hidden" />
+        
+        <textarea style="width: 500px; height: 100px" name="textarea"></textarea><br />
+        
+        <select name="select-single">
+            <option value="1">elem 1</option>
+            <option value="2">elem 2</option>
+            <option value="3">elem 3</option>
+            <option value="4">elem 4</option>
+            <option value="2">elem 5 with value 2</option>
+        </select>
+        
+        <select multiple="multiple" name="select-multiple">
+            <option value="1">elem 1</option>
+            <option value="2">elem 2</option>
+            <option value="3">elem 3</option>
+            <option value="4">elem 4</option>
+            <option value="5">elem 5</option>
+        </select>
+
+        <input type="submit" />
+    </form>
+</body>
+</html>
