@@ -48,6 +48,8 @@ $(function() {
     $.fn.svarx.options.bindTo = 'submit test';
     $.fn.svarx.options.immutable = true;
     $.fn.svarx.options.debugMode = true;
+    $.fn.svarx.rules['test:true'] = function() {return true;};
+    $.fn.svarx.rules['test:false'] = function() {return false;};
 
     var t = $.fn.svarx.methods.debug.expect;
     // test 1
@@ -221,6 +223,21 @@ $(function() {
         .svarx({svarxXML: xml('propagation')});
     console.groupEnd('propagation');
 
+    console.group('empty_rule');
+    $('form')
+        .one('svarxloaded', function() {
+            this.reset();
+            var $f = $(this);
+            
+            $f.find('input[name=text]').eq(1).val(42);
+
+            t.msg = ['always_happens_on_block', 'always_happens1', 'always_happens2', 'conditional_always_happens', 'always_happens_rule_full'];
+            t.isValid = false;
+            $f.trigger('submit').trigger('test');
+            
+        })
+        .svarx({svarxXML: xml('empty_rule')});
+    console.groupEnd('empty_rule');
 
 
 });
@@ -308,6 +325,39 @@ $(function() {
                     </block>
                 
                 </block>
+            </validate>
+        </svarx>
+    </textarea>
+
+    <textarea id="empty_rule" class="svarx">
+        <svarx>
+            <validate>
+                <errtarget name="password" />
+                    
+                <block>
+                    <block onerror="always_happens_on_block">
+                        <rule type="test:true" onerror="never_happens" />
+                        <rule type="test:false" inverted="yes" onerror="never_happens1" />
+                        
+                        <rule type="test:true" inverted="yes" onerror="always_happens1" />
+                        <rule type="test:false" onerror="always_happens2" />
+                    </block>
+                </block>
+                
+                <block logic="if">
+                    <rule type="test:true" />
+                    <rule type="test:false" onerror="conditional_always_happens" />
+                </block>
+
+                <block logic="if">
+                    <rule type="test:false" />
+                    <rule type="test:false" onerror="conditional_never_happens" />
+                </block>
+                
+                <rule type="test:false" onerror="always_happens_rule_full">
+                    <el name="text" item="1" />
+                </rule>
+                
             </validate>
         </svarx>
     </textarea>

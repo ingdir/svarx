@@ -1,7 +1,7 @@
 /**
  *
  * @author         Max A. Shirshin (ingdir@yandex-team.ru)
- * @version        2.2
+ * @version        2.22
  * @name           SVARX (Semantical VAlidation Rulesets in XML)
  * @description    jQuery plugin for web form validation using SVARX rule descriptions
  * 
@@ -24,7 +24,9 @@
         ATTR_LOGIC = 'logic',
         ATTR_FIRE_ACTS = 'fireacts',
         ATTR_FIELD_COUNT = 'fieldcount',
-        ATTR_SVARXID = 'svarxid';
+        ATTR_SVARXID = 'svarxid',
+        STR_ERRTARGET = 'errtarget',
+        STR_ELEMENT = 'element';
     
     // Выбирает из непосредственных детей узла root все узлы с заданным(и) именем (именами)
     // и возвращает их как массив
@@ -72,13 +74,13 @@
              * Внешние алиасы для нахождения элементов формы
              */
             function $ruleEls(rule) {
-                return $elsByRule(rule, 'element');
+                return $elsByRule(rule, STR_ELEMENT);
             }
 
             function $targetEls(rule) {
-                if (rule.getAttribute('errtarget') !== null || filterTags(rule, 'errtarget').length > 0) {
-                    return $elsByRule(rule, 'errtarget');
-                } else return $elsByRule(rule, 'element');
+                if (rule.getAttribute(STR_ERRTARGET) !== null || filterTags(rule, STR_ERRTARGET).length > 0) {
+                    return $elsByRule(rule, STR_ERRTARGET);
+                } else return $elsByRule(rule, STR_ELEMENT);
             }
 
             // базовая фция поиска элементов в форме
@@ -108,16 +110,14 @@
                     }
                 }
                 
-                //if (rule.getAttribute('onerror') == 'bad_punctuation') debugger;
-                
-                var context = (contextId == 'element') ? {
+                var context = (contextId == STR_ELEMENT) ? {
                         nameAttr: 'for',
                         itemAttr: 'item',
                         childTag: 'el'
                     } : {  // contextId == 'errtarget'
-                        nameAttr: 'errtarget',
+                        nameAttr: STR_ERRTARGET,
                         itemAttr: 'errtargetitem',
-                        childTag: 'errtarget'
+                        childTag: STR_ERRTARGET
                     },
                     name = rule.getAttribute(context.nameAttr),
                     item = extParseInt(rule.getAttribute(context.itemAttr), 0),
@@ -142,7 +142,7 @@
                             // обрабатываем алиасы.
                             // это нужно делать только для контекста вызова errtarget
                             var alias = el.getAttribute('alias');
-                            if (alias && contextId == 'errtarget') {
+                            if (alias && contextId == STR_ERRTARGET) {
                                 switch (alias) {
                                     case 'children':
                                     // берём все теги rule и для каждого вычисляем его errtargets,
@@ -216,6 +216,22 @@
             $elsByRule.cache = {};
             $elsByRule.uniq  = 1;
 
+            /**
+             *
+             * Вызывает проверяющее правило. Набор элементов, передаваемых на вход, передаётся извне.
+             * Логика инвертированных правил обрабатывается внутри этой фции.
+             * 
+             */
+            function callRule(type, args, rule) {
+                var check = (SVARX.rules.hasOwnProperty(type) ? SVARX.rules[type] : function() {return true})(args.slice(0), rule);
+                // если логика проверки инвертирована, учесть это
+                if (isAttrTrue(rule, ATTR_INVERTED)) {
+                    check = !check;
+                }
+                
+                return check;
+            }
+
             function applyRule(rule) {
                 var type = rule.getAttribute('type'),
                     elsNonEmpty = [],
@@ -224,6 +240,17 @@
                     failIfNull = isAttrTrue(rule, ATTR_FAIL_IF_NULL),
                     fieldCount = extParseInt(rule.getAttribute(ATTR_FIELD_COUNT), 0);
                 
+                // Специальный случай: правило не запрашивает ни одного элемента.
+                // Такие правила получают полный набор всех элементов формы на вход.
+                // Для них не проверяется пустота элементов, а вызов проверяющего правила
+                // происходит, даже если элементов в форме нет.
+                //
+                // Также не проверяется ATTR_FAIL_IF_NULL
+                // 
+                if (fieldCount === 0) {
+                    return callRule(type, $getElements(), rule);
+                }
+
                 // Определяем набор элементов, переданных для валидации
                 // (некоторые правила могут принимать на вход более одного элемента).
                 //
@@ -234,9 +261,6 @@
                     }
                 });
         
-                // Специальный случай: правило не запрашивает ни одного элемента
-                if (fieldCount === 0) return true;
-
                 // Специальный случай: число найденных в форме элементов не совпадает с запрошенным в правиле.
                 // В этом случае SVARX-валидация по умолчанию считает проверку истинной.
                 // Это поведение можно переопределить указанием на правиле атрибута failifnull с истинным значением.
@@ -254,13 +278,10 @@
                     //
                     // если мы работаем с required, то передаём все элементы,
                     // иначе — только непустые или нетекстовые
-                    check = (SVARX.rules[type] || function() {return true})((type === 'required' ? $els.get() : elsNonEmpty).slice(0), rule);
-                    // если логика проверки инвертирована, учесть это
-                    if (isAttrTrue(rule, ATTR_INVERTED)) {
-                        check = !check;
-                    }
+                    return callRule(type, type === 'required' ? $els.get() : elsNonEmpty, rule);
                 }
                 
+                // default
                 return check;
             }
 
@@ -535,7 +556,7 @@
                 bindHandlers();  // назначаем обработчики на форму
                 $form.trigger('svarxloaded', [op.svarxXML]);
             }
-
+            
             var op = $.extend({}, SVARX.options, options || {}),
                 form = this,
                 $form = $(form);
@@ -549,7 +570,20 @@
             }
             
             if (op.svarxXML) {
-                init();
+                try {
+                    if (window.ActiveXObject) {
+                        var emptyXMLDoc = new ActiveXObject('Msxml2.DOMDocument.3.0');
+                    } else {
+                        var emptyXMLDoc = document.implementation.createDocument('', '', null);
+                    }
+
+                    emptyXMLDoc.appendChild(op.svarxXML.documentElement.cloneNode(true));
+                    op.svarxXML = emptyXMLDoc;
+                    
+                    init();
+                } catch(e) {
+                    $form.trigger('svarxfailed', [{}, 'Cannot clone XML document']);
+                }
             } else if (op.svarxURL) {
                 $.ajax($.extend({
                     dataType: 'xml',
@@ -570,7 +604,7 @@
 
     $.extend(SVARX, {
         // версия библиотеки
-        version: 2.2,
+        version: 2.22,
         options: {
             method: undefined,  // имя плагина визуализации валидации
             bindTo: 'submit',  // на какое событие по умолчанию назначаем валидацию
@@ -617,7 +651,7 @@
             regexp: function(els, rule) {
                 // Мы можем проверять как совпадение с полным значением (в стиле Web Forms 2.0),
                 // так и по подстроке. Для этого используются разные атрибуты.
-                // Если нужна подстрока, надо использовать атрибут partmatch, если полное совпадение --
+                // Если нужна подстрока, надо использовать атрибут partmatch, если полное совпадение —
                 // match. Если указаны оба правила, будет проверено только match.
                 
                 var match = rule.getAttribute('match'),
@@ -744,14 +778,7 @@
             // требует, чтобы поле было непустым.
             // работает только для текстовых полей -- для всех прочих не имеет смысла
             required: function(els, rule) {
-                var check = true,
-                    el = els[0];
-                
-                if (SVARX.isTextControl(el)) {
-                    check = SVARX.nonEmpty(el);
-                }
-                
-                return check;
+                return SVARX.isTextControl(els[0]) ? SVARX.nonEmpty(els[0]) : true;
             }
         },
         processors: {
