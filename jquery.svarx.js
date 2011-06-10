@@ -1,7 +1,7 @@
 /**
  *
  * @author         Max A. Shirshin (ingdir@yandex-team.ru)
- * @version        2.22
+ * @version        2.23
  * @name           SVARX (Semantical VAlidation Rulesets in XML)
  * @description    jQuery plugin for web form validation using SVARX rule descriptions
  * 
@@ -223,7 +223,10 @@
              * 
              */
             function callRule(type, args, rule) {
-                var check = (SVARX.rules.hasOwnProperty(type) ? SVARX.rules[type] : function() {return true})(args.slice(0), rule);
+                var ruleFunc = SVARX.rules.hasOwnProperty(type) ?
+                    SVARX.rules[type] :
+                    (SVARX.unknownRuleFactory(type) || function() {return true}),
+                check = ruleFunc(args.slice(0), rule);
                 // если логика проверки инвертирована, учесть это
                 if (isAttrTrue(rule, ATTR_INVERTED)) {
                     check = !check;
@@ -604,7 +607,7 @@
 
     $.extend(SVARX, {
         // версия библиотеки
-        version: 2.22,
+        version: 2.23,
         options: {
             method: undefined,  // имя плагина визуализации валидации
             bindTo: 'submit',  // на какое событие по умолчанию назначаем валидацию
@@ -814,6 +817,9 @@
         },
         nonEmpty: function(el) {
             return el.value !== '';
+        },
+        unknownRuleFactory: function(type) {
+            return function() {return true};
         }
     });
 })(jQuery);
