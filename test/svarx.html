@@ -9,6 +9,7 @@
 }
 </style>
 <script src="http://yandex.st/jquery/1.4.4/jquery.min.js"></script>
+<script src="../extra-tools/jquery.json2xmlDoc.js"></script>
 <script src="../jquery.svarx.js"></script>
 <script src="../vis-plugins/debug/svarx.methods.debug.js"></script>
 <script>
@@ -30,7 +31,8 @@ $(function() {
         };
     } else {
         if ($.browser.msie) {
-            window.console.groupEnd = window.console.group = function(){};
+            window.console.group = function(group){window.console.log('+++ ' + group)};
+            window.console.groupEnd = function(group){window.console.log('--- ' + group)};
             window.console._timers = {};
             window.console.time = function(id) {
                 window.console._timers[id] = new Date().getTime();
@@ -239,6 +241,50 @@ $(function() {
         .svarx({svarxXML: xml('empty_rule')});
     console.groupEnd('empty_rule');
 
+    console.group('combined_as_json');
+    $('form')
+        .one('svarxloaded', function() {
+            this.reset();
+            var $f = $(this);
+
+            t.msg = ['req', 'req', 'req'];
+            t.isValid = false;
+            $f.trigger('submit').trigger('test');
+
+            var $inputs = $f.find('input').val(42);
+
+            t.msg = [];
+            t.isValid = true;
+            $f.trigger('submit').trigger('test');
+
+        })
+        .svarx({svarxXML: $.json2xmlDoc({
+            validate: [
+                {
+                    rule: [
+                        {
+                            'for': 'text',
+                            'item': 0,
+                            'type': 'required',
+                            'onerror': 'req'
+                        },
+                        {
+                            'for': 'text',
+                            'item': 1,
+                            'type': 'required',
+                            'onerror': 'req'
+                        },
+                        {
+                            'for': 'password',
+                            'item': 0,
+                            'type': 'required',
+                            'onerror': 'req'
+                        }
+                    ]
+                }
+            ]
+        }, 'svarx')});
+    console.groupEnd('combined_as_json');
 
 });
 </script>
