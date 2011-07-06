@@ -1,4 +1,4 @@
-﻿### What is SVARX? ###
+### What is SVARX? ###
 
   * **S**emantical **VA**lidation **R**ulesets in **X**ML
   * XML format to describe validation rules semantically;
