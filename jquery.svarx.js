@@ -1,9 +1,9 @@
 /**
  *
  * @author         Max A. Shirshin (ingdir@yandex-team.ru)
- * @version        2.23
+ * @version        2.24
  * @name           SVARX (Semantical VAlidation Rulesets in XML)
- * @description    jQuery plugin for web form validation using SVARX rule descriptions
+ * @description   jQuery plugin for web form validation using SVARX rule descriptions
  * 
  */
 
@@ -12,7 +12,6 @@
     
     // Специальный регэксп для правильной замены пробельных символов
     var ws = '[\\x09\\x0A-\\x0D\\x20\\xA0\\u1680\\u180E\\u2000-\\u200A\\u2028\\u2029\\u202F\\u205F\\u3000]+',
-        extWhiteSpace = '^' + ws + '|' + ws + '$',
         eventNameSpace = '.svarx' + Math.floor(Math.random() * 10000),
         undefined,
         EMPTY_FUNC = function(){},
@@ -179,26 +178,16 @@
                 }
 
                 $.each(fieldList, function(i, el) {
-                    if (!el[0]) {
                         // специальное соглашение, используется при обработке узлов
                         // block и validate, позволяет вернуть саму форму как объект,
-                        // на котором будут вызываться ошибки
-                        var $elements = $form;
-                    } else {
-                        // кажется, фильтрация в реальном времени по «свежей» выборке
-                        // есть оптимальный вариант нахождения нужных элементов.
-                        //
-                        // массиву elements верить не особо хочется, хотя это повод
-                        // для аккуратного исследования.
-                        // 
-                        var $elements = $all
-                            .filter(function() {
-                                var name = this.getAttribute('name');
-                                return !this.disabled && name && name === el[0];
-                            })
-                            .eq(el[1]);  // мы заботимся, чтобы внутри el[1] всегда было число
-                    }
-                    
+                        // на котором будут вызываться ошибки.
+                        var $elements = !el[0]
+                            ? $form
+                            : $all.filter(function() {  // нельзя верить массиву form.elements
+                                  var name = this.getAttribute('name');
+                                  return !this.disabled && name && name === el[0];
+                              }).eq(el[1]);  // мы заботимся, чтобы внутри el[1] всегда было число
+
                     // кроме всего прочего, .add гарантирует уникальность
                     // и отсутствие дубликатов в выборке
                     $result = $result.add($elements);
@@ -795,7 +784,7 @@
             },
             
             trim: function(el) {
-                el.value = el.value.replace(new RegExp(extWhiteSpace, 'g'), '');
+                el.value = el.value.replace(new RegExp('^' + ws + '|' + ws + '$', 'g'), '');
             },
             
             normalize: function(el) {
