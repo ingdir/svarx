@@ -259,30 +259,28 @@ $(function() {
 
         })
         .svarx({svarxXML: $.json2xmlDoc({
-            validate: [
-                {
-                    rule: [
-                        {
-                            'for': 'text',
-                            'item': 0,
-                            'type': 'required',
-                            'onerror': 'req'
-                        },
-                        {
-                            'for': 'text',
-                            'item': 1,
-                            'type': 'required',
-                            'onerror': 'req'
-                        },
-                        {
-                            'for': 'password',
-                            'item': 0,
-                            'type': 'required',
-                            'onerror': 'req'
-                        }
-                    ]
-                }
-            ]
+            validate: {
+                rule: [
+                    {
+                        'for': 'text',
+                        'item': 0,
+                        'type': 'required',
+                        'onerror': 'req'
+                    },
+                    {
+                        'for': 'text',
+                        'item': 1,
+                        'type': 'required',
+                        'onerror': 'req'
+                    },
+                    {
+                        'for': 'password',
+                        'item': 0,
+                        'type': 'required',
+                        'onerror': 'req'
+                    }
+                ]
+            }
         }, 'svarx')});
     console.groupEnd('combined_as_json');
 
