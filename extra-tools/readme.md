@@ -1,4 +1,4 @@
-﻿### jquery.update.js ###
+### jquery.update.js ###
 
 Плагин, добавляющий в jQuery поддержку нового события **update**.
 
