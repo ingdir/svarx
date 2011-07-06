@@ -15,14 +15,14 @@
  *
  */
 (function($) {
-	/**
-	 * Convert JSON object to XML Document.
-	 *
-	 * @param JSON object (not JSON string!)
-	 * @param root tag name for XML document tree
-	 * @return XML Document
-	 */
-	$.json2xmlDoc = function(json, tagName) {
+    /**
+     * Convert JSON object to XML Document.
+     *
+     * @param JSON object (not JSON string!)
+     * @param root tag name for XML document tree
+     * @return XML Document
+     */
+    $.json2xmlDoc = function(json, tagName) {
         var xmlDoc = window.ActiveXObject
             ? new ActiveXObject('Msxml2.DOMDocument.3.0')
             : document.implementation.createDocument('', '', null);
@@ -33,15 +33,15 @@
             throw new Error('JSON to XML conversion failed: ' + e.message);
         }
 
-		return xmlDoc;
-	};
+        return xmlDoc;
+    };
 
-	function convertToXml(root, json, tagName) {
+    function convertToXml(root, json, tagName) {
         var doc = root.ownerDocument || root,
             newTag = root.appendChild( doc.createElement(tagName) );
 
-		for (var key in json) {
-			if (json.hasOwnProperty(key)) {
+        for (var key in json) {
+            if (json.hasOwnProperty(key)) {
                 if ($.isArray(json[key])) {
                     createNodeFromArray(newTag, json[key], key);
                 } else if (typeof json[key] === 'object') {
@@ -49,27 +49,27 @@
                 } else {
                     newTag.setAttribute(key, json[key]);
                 }
-			}
-		}
-	}
+            }
+        }
+    }
 
-	function createNodeFromArray(root, source, name) {
+    function createNodeFromArray(root, source, name) {
         if (source.length > 0) {
-			for (var index in source) {
-	            if (typeof source[index] !== 'object') {
-	                if (source[index] === '') {
-	                	root.appendChild( root.ownerDocument.createElement(name) );
-	                } else {
+            for (var index in source) {
+                if (typeof source[index] !== 'object') {
+                    if (source[index] === '') {
+                        root.appendChild( root.ownerDocument.createElement(name) );
+                    } else {
                         root.appendChild( root.ownerDocument.createElement(name) )
                             .appendChild( root.ownerDocument.createTextNode(source[index]) );
-	                }
-	            } else {
-	            	convertToXml(root, source[index], name);
-	            }					
-			}
-		} else {
-			root.appendChild( root.ownerDocument.createElement(name) );
-		}
-	}
+                    }
+                } else {
+                    convertToXml(root, source[index], name);
+                }                    
+            }
+        } else {
+            root.appendChild( root.ownerDocument.createElement(name) );
+        }
+    }
 
 })(jQuery);
