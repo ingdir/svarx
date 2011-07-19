@@ -1,7 +1,7 @@
 /**
  *
  * @author         Max A. Shirshin (ingdir@yandex-team.ru)
- * @version        2.24
+ * @version        2.31
  * @name           SVARX (Semantical VAlidation Rulesets in XML)
  * @description   jQuery plugin for web form validation using SVARX rule descriptions
  * 
@@ -92,12 +92,19 @@
                 delete $getElements.cache;
                 $elsByRule.cache = {};
                 $elsByRule.uniq  = 1;
+                $elsByRule.json = {};
+            }
+            
+            /**
+             * Возвращает JSON-представление атрибутов правила
+             */
+            function ruleAsJSON(ruleNode) {
+                return $.extend({}, $elsByRule.json[ruleNode.getAttribute(ATTR_SVARXID)] || {});
             }
             
             /**
              *
-             * По имени элемента и (опционально) его порядковому номеру
-             * возвращает jquery-объект с элементами из формы
+             * По данным из SVARX-правила возвращает jquery-объект с элементами из формы
              *
              */
             function $elsByRule(rule, contextId) {
@@ -195,6 +202,14 @@
                 
                 // уникальный айдишник надо 1 раз инкрементировать
                 rule.setAttribute(ATTR_SVARXID, ++$elsByRule.uniq);
+                
+                // кэшируем значения атрибутов тегов
+                $elsByRule.json[$elsByRule.uniq] = {};
+                for (var k = 0, l = rule.attributes.length; k < l; k++) {
+                    var attrName = rule.attributes.item(k).nodeName;
+                    $elsByRule.json[$elsByRule.uniq.toString()][attrName] = rule.getAttribute(attrName);
+                }
+
                 // ключ должен однозначно определять контекст вызова,
                 // одно и то же правило может вызываться для выборки
                 // элементов в разных контекстах
@@ -204,6 +219,7 @@
             }
             $elsByRule.cache = {};
             $elsByRule.uniq  = 1;
+            $elsByRule.json = {};
 
             /**
              *
@@ -215,7 +231,8 @@
                 var ruleFunc = SVARX.rules.hasOwnProperty(type) ?
                     SVARX.rules[type] :
                     (SVARX.unknownRuleFactory(type) || function() {return true}),
-                check = ruleFunc(args.slice(0), rule);
+                check = ruleFunc(args.slice(0), ruleAsJSON(rule));
+
                 // если логика проверки инвертирована, учесть это
                 if (isAttrTrue(rule, ATTR_INVERTED)) {
                     check = !check;
@@ -362,6 +379,11 @@
                 }
             }
 
+            // снимает ранее стоявшие на форме обработчики
+            function unbindHandlers() {
+                $form.unbind(eventNameSpace);
+            }
+            
             // Назначает валидатор на форму
             function bindHandlers() {
                 // обработчик-валидатор
@@ -402,8 +424,8 @@
                 }
                 
                 var m = SVARX.methods[op.method] || {};
+                unbindHandlers();
                 $form
-                    .unbind(eventNameSpace)
                     .bind('svarxformupdate' + eventNameSpace, resetElsCaches)
                     .bind('beforesvarx'     + eventNameSpace, m.before || EMPTY_FUNC)
                     .bind('aftersvarx'      + eventNameSpace, m.after  || EMPTY_FUNC)
@@ -508,7 +530,11 @@
                         // вызываем ошибку только если onerror был определён
                         if (errCode) {
                             // поддержка переопределения таргета ошибки
-                            $targetEls(ruleNode).trigger('svarxerror', [errCode, eventType]);
+                            $targetEls(ruleNode).trigger('svarxerror', [
+                                errCode,
+                                eventType,
+                                ruleAsJSON(ruleNode)
+                            ]);
                         }
         
                         if (nodename !== TAG_RULE) {
@@ -588,6 +614,8 @@
                         $form.trigger('svarxfailed', [xhr, status]);
                     }
                 }, op.jQueryAjax));
+            } else {
+                unbindHandlers();
             }
         });
         
@@ -596,7 +624,7 @@
 
     $.extend(SVARX, {
         // версия библиотеки
-        version: 2.24,
+        version: 2.31,
         options: {
             method: undefined,  // имя плагина визуализации валидации
             bindTo: 'submit',  // на какое событие по умолчанию назначаем валидацию
@@ -636,7 +664,7 @@
         },
         methods: {},
         rules: {
-            email: function(els, rule) {
+            email: function(els) {
                 return /^[a-z\d%_][a-z\d%_.&+\-]*\@([a-z\d][a-z\d\-]*\.)+[a-z]{2,10}$/i.test(els[0].value);
             },
         
@@ -646,9 +674,9 @@
                 // Если нужна подстрока, надо использовать атрибут partmatch, если полное совпадение —
                 // match. Если указаны оба правила, будет проверено только match.
                 
-                var match = rule.getAttribute('match'),
-                    partMatch = rule.getAttribute('partmatch'),
-                    flags = rule.getAttribute('flags') || '',
+                var match = rule.match,
+                    partMatch = rule.partmatch,
+                    flags = rule.flags || '',
                     el = els[0],
                     re,
                     execResult;
@@ -675,7 +703,7 @@
             },
         
             // для радиобаттонов и чекбоксов
-            checked: function(els, rule) {
+            checked: function(els) {
                 var type = els[0].type.toLowerCase();
                 
                 if (type === 'checkbox' || type === 'radio') {
@@ -685,7 +713,7 @@
         
             // для селектов, одиночных и множественных
             selected: function(els, rule) {
-                var option = parseInt(rule.getAttribute('option'), 10),
+                var option = parseInt(rule.option, 10),
                     el = els[0],
                     type = el.type.toLowerCase();
                 
@@ -727,7 +755,7 @@
                     vals.push(els[i].value);
                 }
                 
-                switch (rule.getAttribute('comparison')) {
+                switch (rule.comparison) {
                     case 'number':
                         initial = 1 * vals[0];
                         for (var i = 1, j = vals.length; i < j; i++) {
@@ -738,8 +766,9 @@
                         }
                     break;
                     
-                    default:  // сюда же относится case 'string'
-                        nocase = rule.getAttribute('nocase');
+                    case 'string':
+                    default:
+                        nocase = rule.nocase;
                         if (nocase === 'yes' || nocase === 'nocase' || nocase == 1) {
                             for (var i = 0, j = vals.length; i < j; i++) {
                                 vals[i] = vals[i].toLowerCase();
@@ -758,8 +787,8 @@
             },
             
             range: function(els, rule) {
-                var min = parseFloat(rule.getAttribute('min')),
-                    max = parseFloat(rule.getAttribute('max')),
+                var min = parseFloat(rule.min),
+                    max = parseFloat(rule.max),
                     numVal = parseFloat(els[0].value);
 
                 if (isNaN(numVal) || (!isNaN(min) && numVal < min) || (!isNaN(max) && numVal > max)) {
@@ -769,7 +798,7 @@
             
             // требует, чтобы поле было непустым.
             // работает только для текстовых полей -- для всех прочих не имеет смысла
-            required: function(els, rule) {
+            required: function(els) {
                 return SVARX.isTextControl(els[0]) ? SVARX.nonEmpty(els[0]) : true;
             }
         },
