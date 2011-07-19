@@ -1,7 +1,7 @@
 /**
  *
  * @author         Max A. Shirshin (ingdir@yandex-team.ru)
- * @version        2.31
+ * @version        2.32
  * @name           SVARX (Semantical VAlidation Rulesets in XML)
  * @description   jQuery plugin for web form validation using SVARX rule descriptions
  * 
@@ -572,7 +572,7 @@
             function init() {
                 preprocessXML();  // препроцессинг XML - разворачиваем логические условия
                 bindHandlers();  // назначаем обработчики на форму
-                $form.trigger('svarxloaded', [op.svarxXML]);
+                $form.trigger('svarxloaded', [op.svarxXML, op]);
             }
             
             var op = $.extend({}, SVARX.options, options || {}),
@@ -600,7 +600,7 @@
                     
                     init();
                 } catch(e) {
-                    $form.trigger('svarxfailed', [{}, 'Cannot clone XML document']);
+                    $form.trigger('svarxfailed', [{}, 'Cannot clone XML document', op]);
                 }
             } else if (op.svarxURL) {
                 $.ajax($.extend({
@@ -611,7 +611,7 @@
                         init();
                     },
                     error: function(xhr, status) {
-                        $form.trigger('svarxfailed', [xhr, status]);
+                        $form.trigger('svarxfailed', [xhr, status, op]);
                     }
                 }, op.jQueryAjax));
             } else {
@@ -624,7 +624,7 @@
 
     $.extend(SVARX, {
         // версия библиотеки
-        version: 2.31,
+        version: 2.32,
         options: {
             method: undefined,  // имя плагина визуализации валидации
             bindTo: 'submit',  // на какое событие по умолчанию назначаем валидацию
