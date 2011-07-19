@@ -1,7 +1,7 @@
 /**
  *
  * @author         Max A. Shirshin (ingdir@yandex-team.ru)
- * @version        2.32
+ * @version        2.33
  * @name           SVARX (Semantical VAlidation Rulesets in XML)
  * @description   jQuery plugin for web form validation using SVARX rule descriptions
  * 
@@ -569,10 +569,21 @@
                 return result;
             }
 
+            function cloneXML(doc) {
+                if (window.ActiveXObject) {
+                    var emptyXMLDoc = new ActiveXObject('Msxml2.DOMDocument.3.0');
+                } else {
+                    var emptyXMLDoc = document.implementation.createDocument('', '', null);
+                }
+
+                emptyXMLDoc.appendChild(doc.documentElement.cloneNode(true));
+                return emptyXMLDoc;
+            }
+            
             function init() {
                 preprocessXML();  // препроцессинг XML - разворачиваем логические условия
                 bindHandlers();  // назначаем обработчики на форму
-                $form.trigger('svarxloaded', [op.svarxXML, op]);
+                $form.trigger('svarxloaded', [cloneXML(op.svarxXML), op]);
             }
             
             var op = $.extend({}, SVARX.options, options || {}),
@@ -589,15 +600,7 @@
             
             if (op.svarxXML) {
                 try {
-                    if (window.ActiveXObject) {
-                        var emptyXMLDoc = new ActiveXObject('Msxml2.DOMDocument.3.0');
-                    } else {
-                        var emptyXMLDoc = document.implementation.createDocument('', '', null);
-                    }
-
-                    emptyXMLDoc.appendChild(op.svarxXML.documentElement.cloneNode(true));
-                    op.svarxXML = emptyXMLDoc;
-                    
+                    op.svarxXML = cloneXML(op.svarxXML);
                     init();
                 } catch(e) {
                     $form.trigger('svarxfailed', [{}, 'Cannot clone XML document', op]);
@@ -624,7 +627,7 @@
 
     $.extend(SVARX, {
         // версия библиотеки
-        version: 2.32,
+        version: 2.33,
         options: {
             method: undefined,  // имя плагина визуализации валидации
             bindTo: 'submit',  // на какое событие по умолчанию назначаем валидацию
