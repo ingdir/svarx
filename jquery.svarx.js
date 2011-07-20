@@ -1,7 +1,7 @@
 /**
  *
  * @author         Max A. Shirshin (ingdir@yandex-team.ru)
- * @version        2.33
+ * @version        2.34
  * @name           SVARX (Semantical VAlidation Rulesets in XML)
  * @description   jQuery plugin for web form validation using SVARX rule descriptions
  * 
@@ -627,7 +627,7 @@
 
     $.extend(SVARX, {
         // версия библиотеки
-        version: 2.33,
+        version: 2.34,
         options: {
             method: undefined,  // имя плагина визуализации валидации
             bindTo: 'submit',  // на какое событие по умолчанию назначаем валидацию
@@ -690,11 +690,11 @@
                 // Т.к. в синтаксисе регулярных выражений могут быть ошибки,
                 // создаём объект через try
                 try {
-                    if (match !== null) {
+                    if (match) {
                         re = new RegExp(match, flags);
                         execResult = re.exec(el.value);
                         return execResult ? execResult[0] === execResult.input : false;
-                    } else if (partMatch !== null) {
+                    } else if (partMatch) {
                         re = new RegExp(partMatch, flags);
                         return re.test(el.value);
                     } else {
