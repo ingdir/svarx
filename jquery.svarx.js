@@ -647,6 +647,7 @@
                 // HTML5 stuff :-(
                 case 'search':
                 case 'email':
+                case 'tel':
                 case 'url':
                 case 'number':
                 
