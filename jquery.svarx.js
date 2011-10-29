@@ -1,7 +1,7 @@
 /**
  *
  * @author         Max A. Shirshin (ingdir@yandex-team.ru)
- * @version        2.35
+ * @version        2.36
  * @name           SVARX (Semantical VAlidation Rulesets in XML)
  * @description   jQuery plugin for web form validation using SVARX rule descriptions
  * 
@@ -387,12 +387,11 @@
             function bindHandlers() {
                 // обработчик-валидатор
                 function handler(e) {
-                    function checkPrevented(e) {
-                        checkPrevented.prevented = e.isDefaultPrevented();
-                    }
-                    checkPrevented.prevented = false;
-                    
-                    var validationResult = true;
+                    var validationResult = true,
+                        wasPrevented = false,
+                        checkPrevented = function(e) {
+                            wasPrevented = e.isDefaultPrevented();
+                        };
                     
                     // такой метод назначения гарантирует, что обработчик
                     // checkPrevented выполнится последним и мы сможем понять,
@@ -401,7 +400,7 @@
                         .one('beforesvarx', checkPrevented)
                         .trigger('beforesvarx', [e.type]);
                     
-                    if (checkPrevented.prevented) {
+                    if (wasPrevented) {
                         // не выполнять SVARX-валидацию, не предотвращать событие
                         return true;
                     }
@@ -417,7 +416,7 @@
                        .trigger('aftersvarx', [validationResult, e.type]);
         
                     // событие предотвращает e.preventDefault(), позванный из любого обработчика aftersvarx
-                    if (checkPrevented.prevented) {
+                    if (wasPrevented) {
                         e.preventDefault();
                     }
                 }
@@ -626,7 +625,7 @@
 
     $.extend(SVARX, {
         // версия библиотеки
-        version: 2.35,
+        version: 2.36,
         options: {
             method: undefined,  // имя плагина визуализации валидации
             bindTo: 'submit',  // на какое событие по умолчанию назначаем валидацию
@@ -667,6 +666,10 @@
         },
         methods: {},
         rules: {
+            // deprecated, DO NOT USE.
+            // будет убрана из дефолтной поставки.
+            // такая валидация должна описываться кастомным правилом, нет универсального регэкспа
+            // для валидации e-mail адреса.
             email: function(els) {
                 return /^[a-z\d%_][a-z\d%_.&+\-]*\@([a-z\d][a-z\d\-]*\.)+[a-z]{2,10}$/i.test(els[0].value);
             },
