@@ -9,3 +9,6 @@
 
 Prefer JSON over XML?
 Get **extra-tools/jquery.json2xmlDoc.js** jQuery plugin to transform JSON data into SVARX rule sets in milliseconds.
+
+### Twitter ###
+Follow http://twitter.com/svarx for project news. 
