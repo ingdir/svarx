@@ -8,19 +8,19 @@ Each time before validation starts, form field values are preprocessed using rul
 You can store more than one `<validate/>` block in a single SVARX file; in this case, add a non-empty **id** attribute to each of your **validate** blocks and pass **validateBlockId** parameter to the jQuery plugin with the corresponding id.
 
 #### rule ####
-The `<rule>` tag can be self-closing (short form) which is used mostly to describe validation rule for a single field, or act as a block-level container (full form) to dewcribe validation for more than one field.
+The `<rule>` tag can be self-closing (short form) which is used mostly to describe validation rule for a single field, or act as a block-level container (full form) to describe validation for more than one field.
 
-##### Краткая форма тега rule #####
-Имеет **обязательный** атрибут:
+##### rule — short notation #####
+**Mandatory** attribute:
 
-* **type** — имя (алиас) валидирующего правила.
+* **type** — specify validation type here
 
-**Опциональные** атрибуты, общие для всех тегов `<rule>`:
+**Optional** attributes which can be used with any `<rule>` tag regardless of validation type it defines:
 
-* **for** — имя поля формы, к которому применяется правило. Если этот атрибут не указан, то на вход валидирующему правилу придут все имеющиеся элементы формы.
-* **item** — если в форме несколько элементов с одинаковым именем, то item позволяет указать номер элемента (нумерация с нуля).
-* **onerror** — идентификатор ошибки, которая будет вызвана в случае нарушения правила. Может состоять из латинских букв, подчёркиваний и тире.
-* **errtarget** — имя поля формы, на котором реально будет вызван обработчик SVARX-ошибки для данного правила. По умолчанию, это событие выполняется на поле, указанном внутри атрибута for, но данный атрибут позволяет переопределить это поведение. Этот атрибут используется для семантического соотнесения ошибки с другим элементом, нежели тот, на кототом определёно правило валидации.
+* **for** — the name of a form field to apply the rule to; if not specified, all existing form elements are passed to a validation function. Omitting this attribute is an effective way to describe user defined data-independent validation rules.
+* **item** — a zero-based index of an element in case you have more than one form element with the same name.
+* **onerror** — error id, the "name" of error that identifies this particular rule; error handlers will get this id and use it to present the error to the user. Since this id may be used to bind visualization with error data, it can become an HTML class name, file name etc., so it's not recommended to use anything except Latin letters and digits to create these ids.
+* **errtarget** — the name of a form field that becomes responsible for the error on the presentation layer, also the target element of SVARX error handler when it is called. By default, this value is the same as specified in the **for** attribute, but you can redefine this. Useful for complex forms where actual validated fields and not always the fields that explain validation errors to the user. For example, you may have a field to input the phone number and parse it dynamically into country code, city code, and local number, placing each of them into a separate hidden input. You may want to validate hidden inputs but provide error message (red highlight etc.) on the original field, which would be an *errtarget** in this case.  
 * **errtargetitem** — аналог атрибута **item**, но относится к **errtarget**. Для случая, когда указан **errtarget** и в форме есть несколько элементов с подобным именем, использование **errtargetitem** позволяет указать номер элемента. Нумерация с нуля.
 * **inverted="yes|no"** — логическое **not** для правила, меняющее результат проверки на противоположный
 
