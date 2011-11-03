@@ -10,7 +10,8 @@
 (function($) {
     // Helper functions
     
-    // Специальный регэксп для правильной замены пробельных символов
+    // A regexp to get rid of white space characters, much better than just \s
+    // as it also handles rare and some strange cases
     var ws = '[\\x09\\x0A-\\x0D\\x20\\xA0\\u1680\\u180E\\u2000-\\u200A\\u2028\\u2029\\u202F\\u205F\\u3000]+',
         eventNameSpace = '.svarx' + Math.floor(Math.random() * 10000),
         undefined,
@@ -27,8 +28,8 @@
         STR_ERRTARGET = 'errtarget',
         STR_ELEMENT = 'element';
     
-    // Выбирает из непосредственных детей узла root все узлы с заданным(и) именем (именами)
-    // и возвращает их как массив
+    // Select immediate children of root with tagNames listed as remaining args.
+    // Return result as an array.
     function filterTags(root) {
         var result = [],
             i = 0,
@@ -50,27 +51,24 @@
         return result;
     }
     
-    // Проверяет истинность значения атрибута в заранее оговоренном семантическом смысле
+    // Check that attribute value is "true" 
     function isAttrTrue(node, attrName) {
         var attr = node.getAttribute(attrName);
         return (attr === attrName || attr === 'yes' || attr === '1' || attr === 'true');
     }
     
-    // Пытается распарсить значение как целое число.
-    // Если не сложилось, возвращает второй (запасной) аргумент
-    // как результат своей работы
+    // Parse value as an integer.
+    // If that doesn't work, returns the secondary argument instead.
     function extParseInt(value, fallback) {
         var result = parseInt(value, 10);
         return isNaN(result) ? fallback : result;
     }
     
-    // Внешний интерфейс
-    
-    // инициализация SVARX-валидации
+    // Public API
     var SVARX = $.fn.svarx = function(options) {
         this.filter('form').each(function() {
             /**
-             * Внешние алиасы для нахождения элементов формы
+             * Shortcut functions to find form elements based on info provided in validation rules
              */
             function $ruleEls(rule) {
                 return $elsByRule(rule, STR_ELEMENT);
@@ -82,12 +80,12 @@
                 } else return $elsByRule(rule, STR_ELEMENT);
             }
 
-            // базовая фция поиска элементов в форме
+            // basic form element lookup function
             function $getElements() {
                 return $getElements.cache || ($getElements.cache = $form.find('input,select,textarea'));
             }
             
-            // сбросить все кеши, относящиеся к поиску элементов в форме
+            // Drop all internal caches related to element search
             function resetElsCaches() {
                 delete $getElements.cache;
                 $elsByRule.cache = {};
@@ -96,7 +94,8 @@
             }
             
             /**
-             * Возвращает JSON-представление атрибутов правила
+             * Return rule attributes as JSON; needed for functions that implement validations,
+             * both built-in and user-defined.
              */
             function ruleAsJSON(ruleNode) {
                 return $.extend({}, $elsByRule.json[ruleNode.getAttribute(ATTR_SVARXID)] || {});
@@ -104,7 +103,8 @@
             
             /**
              *
-             * По данным из SVARX-правила возвращает jquery-объект с элементами из формы
+             * Returns a jQuery object with all form elements corresponding
+             * to a given SVARX rule
              *
              */
             function $elsByRule(rule, contextId) {
@@ -128,37 +128,39 @@
                     name = rule.getAttribute(context.nameAttr),
                     item = extParseInt(rule.getAttribute(context.itemAttr), 0),
                     $all = $getElements(),
-                    $result = $form.filter(function() {return false}), // хитрый способ получить пустой jQuery-объект
+                    $result = $form.filter(function() {return false}), // an 1.3.x-proof way of getting an empty jQuery object :-)
                     fieldList = [];
 
                 if (!name) {
-                    // если нет элемента for (или errtarget в случае вызова через $targetEls),
-                    // то возможны два варианта: или нужные элементы определены в дочерних тегах,
-                    // или мы имеем дело с отсутствием привязки к элементу вообще, тогда надо
-                    // отдавать ссылку на базовую форму.
-                    //
-                    // Невалидный errtarget приведёт к возникновению ошибки на форме
-                    // 
+                    /**
+                    * If there's no "for" attribute (or no "errtarget" in case we're called from $targetEls),
+                    * then two cases are possible: either we'll find necessary element definitions in
+                    * children tags, or we're dealing with a special case (the rule not associated with any element,
+                    * hence no "for" attribute at all) which means we must return the parent form itself.
+                    *
+                    * If "errtarget" specified in the rule does not exist, the error will be propapated
+                    * up to the parent form element.
+                    */ 
                     var childTags = filterTags(rule, context.childTag);
                     
                     if (childTags.length > 0) {
-                        // имеем дело с мультиэлементным правилом.
-                        // парсим внутренности.
+                        // dealing with the multi-element rule;
+                        // parse inner content.
                         $.each(childTags, function(i, el) {
-                            // обрабатываем алиасы.
-                            // это нужно делать только для контекста вызова errtarget
+                            // support for special aliases.
+                            // only necessary when this func is called in an "errtarget" context
                             var alias = el.getAttribute('alias');
                             if (alias && contextId == STR_ERRTARGET) {
                                 switch (alias) {
                                     case 'children':
-                                    // берём все теги rule и для каждого вычисляем его errtargets,
-                                    // заносим их сразу в $result
+                                    // "children" means we take all descendant rule tags,
+                                    // calculate their errtargets and add them to the result
                                     $.each(filterTags(rule, TAG_RULE), function(i, el) {
                                         $result = $result.add( $targetEls(el) );
                                     });
                                     break;
 
-                                    // объект, на котором случится ошибка - сама форма
+                                    // "form" alias means we must trigger error on the form object itself
                                     case 'form':
                                     default:
                                     fieldList.push([undefined, 0]);
@@ -167,52 +169,50 @@
                             } else {
                                 fieldList.push([
                                     el.getAttribute('name'),
-                                    extParseInt(el.getAttribute('item'), 0)  // по умолчанию берём первый элемент
+                                    extParseInt(el.getAttribute('item'), 0)  // first element is the default
                                 ]);
                             }
                         });                        
                     } else {
-                        // в дальнейшем при итерации элемент, у которого
-                        // имя (первая ячейка вложенного массива) вычисляется как false,
-                        // будет заменён ссылкой на родительскую форму.
+                        // on the subsequent iterations, the element whose name evaluates to false
+                        // will be replaced with a parent form reference
                         fieldList.push([undefined, 0]);
                     }
                 } else {
-                    // в этом случае правило связано с единственным полем.
-                    // если item не был указан, он насильно выставлен в 0, т.е.
-                    // первый элемент формы с указанным именем
+                    // this means the rule has only one form field associated with it;
+                    // if "item" attribute is unspecified, set it to 0, which means "get the first
+                    // form element with that name"
                     fieldList.push([name, item]);
                 }
 
                 $.each(fieldList, function(i, el) {
-                        // специальное соглашение, используется при обработке узлов
-                        // block и validate, позволяет вернуть саму форму как объект,
-                        // на котором будут вызываться ошибки.
-                        var $elements = !el[0]
-                            ? $form
-                            : $all.filter(function() {  // нельзя верить массиву form.elements
-                                  var name = this.getAttribute('name');
-                                  return !this.disabled && name && name === el[0];
-                              }).eq(el[1]);  // мы заботимся, чтобы внутри el[1] всегда было число
+                    // sometimes we have to return the form itself;
+                    // in this case, we use a trick: el[0] contains something
+                    // that evaluates to false (normally, there's an element name there,
+                    // which we believe never evaluates to false)
+                    var $elements = !el[0]
+                        ? $form
+                        : $all.filter(function() {  // never use form.elements, it has all sorts of bugs
+                              var name = this.getAttribute('name');
+                              return !this.disabled && name && name === el[0];
+                          }).eq(el[1]);  // el[1] always contains a number
 
-                    // кроме всего прочего, .add гарантирует уникальность
-                    // и отсутствие дубликатов в выборке
+                    // .add() guarantees uniquiness and removes dupes
                     $result = $result.add($elements);
                 });
                 
-                // уникальный айдишник надо 1 раз инкрементировать
+                // unique id must be incremented
                 rule.setAttribute(ATTR_SVARXID, ++$elsByRule.uniq);
                 
-                // кэшируем значения атрибутов тегов
+                // cache tag attributes
                 $elsByRule.json[$elsByRule.uniq] = {};
                 for (var k = 0, l = rule.attributes.length; k < l; k++) {
                     var attrName = rule.attributes.item(k).nodeName;
                     $elsByRule.json[$elsByRule.uniq.toString()][attrName] = rule.getAttribute(attrName);
                 }
 
-                // ключ должен однозначно определять контекст вызова,
-                // одно и то же правило может вызываться для выборки
-                // элементов в разных контекстах
+                // Important: unique key must depend on call context,
+                // 'cause the same rule may be called in one context or another
                 $elsByRule.cache[$elsByRule.uniq + '#' + contextId] = $result;
                 
                 return $result;
@@ -223,8 +223,9 @@
 
             /**
              *
-             * Вызывает проверяющее правило. Набор элементов, передаваемых на вход, передаётся извне.
-             * Логика инвертированных правил обрабатывается внутри этой фции.
+             * Call the check specified by the rule;
+             * elements to be processed are passed from other methods.
+             * Here's where the rule's "inverted" attribute is processed.
              * 
              */
             function callRule(type, args, rule) {
@@ -233,7 +234,7 @@
                     (SVARX.unknownRuleFactory(type) || function() {return true}),
                 check = ruleFunc(args.slice(0), ruleAsJSON(rule));
 
-                // если логика проверки инвертирована, учесть это
+                // invert logic if necessary
                 if (isAttrTrue(rule, ATTR_INVERTED)) {
                     check = !check;
                 }
@@ -245,47 +246,39 @@
                 var type = rule.getAttribute('type'),
                     elsNonEmpty = [],
                     check = true,
-                    // правило должно провалиться, если хотя бы 1 из запрошенных элементов не найден
+                    // rule must fail if any of the elements is not found
                     failIfNull = isAttrTrue(rule, ATTR_FAIL_IF_NULL),
                     fieldCount = extParseInt(rule.getAttribute(ATTR_FIELD_COUNT), 0);
                 
-                // Специальный случай: правило не запрашивает ни одного элемента.
-                // Такие правила получают полный набор всех элементов формы на вход.
-                // Для них не проверяется пустота элементов, а вызов проверяющего правила
-                // происходит, даже если элементов в форме нет.
+                // Special case: the rule does not request any elements at all.
+                // These rules get passed a full set of form elements as an argument.
                 //
-                // Также не проверяется ATTR_FAIL_IF_NULL
+                // Neither SVARX.nonEmpty() nor ATTR_FAIL_IF_NULL are considered.
                 // 
                 if (fieldCount === 0) {
                     return callRule(type, $getElements(), rule);
                 }
 
-                // Определяем набор элементов, переданных для валидации
-                // (некоторые правила могут принимать на вход более одного элемента).
+                // Receive elements to be validated (some rules can accept more than one element)
                 //
-                // Сразу же заполняем массив непустых элементов из выборки
                 var $els = $ruleEls(rule).each(function() {
                     if (!SVARX.isTextControl(this) || SVARX.nonEmpty(this)) {
                         elsNonEmpty.push(this);
                     }
                 });
         
-                // Специальный случай: число найденных в форме элементов не совпадает с запрошенным в правиле.
-                // В этом случае SVARX-валидация по умолчанию считает проверку истинной.
-                // Это поведение можно переопределить указанием на правиле атрибута failifnull с истинным значением.
+                // Special case: the number of elements the form contains is not equal
+                // to the number of elements requested by the rule.
+                // In this case, valiidation is considered TRUE by default,
+                // unless there is "failifnull" attribute specified which inverts this default.
                 if ($els.size() !== fieldCount) return !failIfNull;
                 
-                // собственно валидация
-                
-                // Специальный случай:
-                // как обычная, так и инвертированная проверка правил НЕ СРАБАТЫВАЮТ на пустых полях,
-                // кроме случая, когда проверяется правило required
+                // Special case:
+                // validations are not applied to empty fields ("inverted" attribute is ignored in this case),
+                // UNLESS this is a "required" rule
                 if (elsNonEmpty.length > 0 || type === 'required') {
-                    // массив элементов каждый раз клонируется, чтобы методы валидации
-                    // не могли его случайно модифицировать.
-                    //
-                    // если мы работаем с required, то передаём все элементы,
-                    // иначе — только непустые или нетекстовые
+                    // "required" gets ALL elements, other validations
+                    // must be content with non-empty and non-textual ones
                     return callRule(type, type === 'required' ? $els.get() : elsNonEmpty, rule);
                 }
                 
