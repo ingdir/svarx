@@ -20,10 +20,10 @@ Each time before validation starts, form field values are preprocessed using rul
 
 **Опциональные** атрибуты, общие для всех тегов `<rule>`:
 
-* **for** — имя поля формы, к которому применяется правило. Если этот атрибут не указан, то на вход валидирующему правилу придут все имеющиеся элементы формы.
-* **item** — если в форме несколько элементов с одинаковым именем, то item позволяет указать номер элемента (нумерация с нуля).
-* **onerror** — идентификатор ошибки, которая будет вызвана в случае нарушения правила. Может состоять из латинских букв, подчёркиваний и тире.
-* **errtarget** — имя поля формы, на котором реально будет вызван обработчик SVARX-ошибки для данного правила. По умолчанию, это событие выполняется на поле, указанном внутри атрибута for, но данный атрибут позволяет переопределить это поведение. Этот атрибут используется для семантического соотнесения ошибки с другим элементом, нежели тот, на кототом определёно правило валидации.
+* **for** — the name of a form field to apply the rule to; if not specified, all existing form elements are passed to a validation function. Omitting this attribute is an effective way to describe user defined data-independent validation rules.
+* **item** — a zero-based index of an element in case you have more than one form element with the same name.
+* **onerror** — error id, the "name" of error that identifies this particular rule; error handlers will get this id and use it to present the error to the user. Since this id may be used to bind visualization with error data, it can become an HTML class name, file name etc., so it's not recommended to use anything except Latin letters and digits to create these ids.
+* **errtarget** — the name of a form field that becomes responsible for the error on the presentation layer, also the target element of SVARX error handler when it is called. By default, this value is the same as specified in the **for** attribute, but you can redefine this. Useful for complex forms where actual validated fields and not always the fields that explain validation errors to the user. For example, you may have a field to input the phone number and parse it dynamically into country code, city code, and local number, placing each of them into a separate hidden input. You may want to validate hidden inputs but provide error message (red highlight etc.) on the original field, which would be an **errtarget** in this case.  
 * **errtargetitem** — аналог атрибута **item**, но относится к **errtarget**. Для случая, когда указан **errtarget** и в форме есть несколько элементов с подобным именем, использование **errtargetitem** позволяет указать номер элемента. Нумерация с нуля.
 * **inverted="yes|no"** — логическое **not** для правила, меняющее результат проверки на противоположный
 * **id** - позволяет указать уникальный идентификатор правила, чтобы его можно было вызвать отдельно; см. раздел про инициализацию SVARX в JavaScript.
@@ -34,8 +34,8 @@ Each time before validation starts, form field values are preprocessed using rul
 Тег `<rule>` в полной форме является контейнером, у которого могут быть вложенные элементы.
 Атрибуты **for**, **item**, **errtarget**, **errtargetitem** в полной форме записи не используются, вместо них в контейнер тега `<rule>` добавляются вложенные теги:
 
-* &lt;el /&gt; — аналог атрибута **for** из краткой формы, используется для указания элемента, с которым связано правило
-* &lt;errtarget /&gt; — аналог атрибута **errtarget**
+* `<el />` — аналог атрибута **for** из краткой формы, используется для указания элемента, с которым связано правило
+* `<errtarget />` — аналог атрибута **errtarget**
 
 Теги &lt;el&gt; и &lt;errtarget&gt; имеют атрибут **name** для указания имени элемента формы, и опциональный атрибут **item** (аналог атрибутов **item** и **errtargetitem** из краткой формы записи). Семантика остаётся та же самая, но для правил, проверяющих более одного поля (например, проверка равенства двух полей), можно перечислить все эти поля, чего нельзя сделать в краткой записи. Теоретически, можно всегда пользоваться полной формой, но результирующий XML получится более объёмным.
 У тега &lt;errtarget&gt; можно использовать атрибут **alias**, который может принимать одно из двух значений: **form** и **children**.
