@@ -8,8 +8,8 @@
         
         console.assert(errorsFact === errorsExpected);
         console.assert(d.isValid === d.expect.isValid);
-        console.log(errorsFact, '— FACT');
-        console.log(errorsExpected, '— EXPECTED');
+        console.log(errorsFact, '- FACT');
+        console.log(errorsExpected, '- EXPECTED');
     }
     
     var d = $.fn.svarx.methods.debug = {

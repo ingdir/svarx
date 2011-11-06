@@ -1,7 +1,7 @@
 /**
  *
  * @author         Max A. Shirshin (ingdir@yandex-team.ru)
- * @version        2.36
+ * @version        2.4
  * @name           SVARX (Semantical VAlidation Rulesets in XML)
  * @description   jQuery plugin for web form validation using SVARX rule descriptions
  * 
@@ -18,6 +18,7 @@
         EMPTY_FUNC = function(){},
         TAG_RULE = 'rule',
         TAG_BLOCK = 'block',
+        TAG_PREPROCESS = 'preprocess',
         TAG_VALIDATE = 'validate',
         ATTR_INVERTED = 'inverted',
         ATTR_FAIL_IF_NULL = 'failifnull',
@@ -31,8 +32,11 @@
     // Select immediate children of root with tagNames listed as remaining args.
     // Return result as an array.
     function filterTags(root) {
-        var result = [],
-            i = 0,
+        var result = [];
+
+        if (!root) return result;
+
+        var i = 0,
             j,
             ch = root.childNodes;
         
@@ -49,6 +53,36 @@
         }
         
         return result;
+    }
+
+    // Some browsers do not provide getElementById() on XML docs.
+    // So this func extracts node by its id, using "root" node as
+    // the beginning of the lookup.
+    //
+    // if root is null, return null.
+    //
+    // if no id is provided, return root.
+    //
+    function byId(id, root) {
+        if (!root) return null;
+        if (!id) return root;
+
+        var tagNames = [TAG_BLOCK, TAG_RULE];
+
+        // yes, root can have id, too
+        if (root.getAttribute('id') === id) {
+            return root;
+        } else {
+            for (var t = 0, n = tagNames.length;  t < n; t++) {
+                for (var i = 0, tags = root.getElementsByTagName(tagNames[t]), j = tags.length; i < j; i++) {
+                    if (tags[i].getAttribute('id') === id) {
+                        return tags[i];
+                    }
+                }
+            }
+
+            return null;
+        }
     }
     
     // Check that attribute value is "true" 
@@ -189,7 +223,7 @@
                     // sometimes we have to return the form itself;
                     // in this case, we use a trick: el[0] contains something
                     // that evaluates to false (normally, there's an element name there,
-                    // which we believe never evaluates to false)
+                    // which, we believe, never evaluates to false)
                     var $elements = !el[0]
                         ? $form
                         : $all.filter(function() {  // never use form.elements, it has all sorts of bugs
@@ -250,11 +284,11 @@
                     failIfNull = isAttrTrue(rule, ATTR_FAIL_IF_NULL),
                     fieldCount = extParseInt(rule.getAttribute(ATTR_FIELD_COUNT), 0);
                 
-                // Special case: the rule does not request any elements at all.
-                // These rules get passed a full set of form elements as an argument.
-                //
-                // Neither SVARX.nonEmpty() nor ATTR_FAIL_IF_NULL are considered.
-                // 
+                /* Special case: the rule does not request any elements at all.
+                   These rules get passed a full set of form elements as an argument.
+                
+                   Neither SVARX.nonEmpty() nor ATTR_FAIL_IF_NULL are considered.
+                */
                 if (fieldCount === 0) {
                     return callRule(type, $getElements(), rule);
                 }
@@ -286,10 +320,9 @@
                 return check;
             }
 
-            // препроцессор XML, разворачивает if-проверки в логические связки
-            // по правилам матлогики
+            // We have to optimize (pre-process) our XML.
             function preprocessXML() {
-                // инвертирует значения инвертирующих атрибутов :-)
+                // invert the meaning of an attribute
                 function invertNode(node) {
                     $.each([ATTR_INVERTED, ATTR_FAIL_IF_NULL], function(i, attr) {
                         if (isAttrTrue(node, attr)) {
@@ -300,19 +333,18 @@
                     });
                 }
                 
-                // обрабатывает узлы block, заменяя if-блоки по правилу
-                // A => B = !A or B
+                // unwrap "if" blocks using logic A → B ↔ ~A | B
                 function unwrapIfThenElse(node) {
                     if (node.getAttribute(ATTR_LOGIC) === 'if') {
                         var chNodes = filterTags(node, TAG_RULE, TAG_BLOCK);
                         
-                        // if..then или if..then..else
+                        // if..then or if..then..else
                         if (chNodes.length == 2 || chNodes.length == 3) {
                             node.setAttribute(ATTR_LOGIC, 'or');
                             invertNode(chNodes[0]);
                         }
                         
-                        // дополнительная обработка для случая if..then..else
+                        // additional processing for "if..then..else" case
                         if (chNodes.length == 3) {
                             var dupNode = node.cloneNode(true),
                                 dupChNodes = filterTags(dupNode, TAG_RULE, TAG_BLOCK);
@@ -320,14 +352,14 @@
                             invertNode(dupChNodes[0]);
                             dupNode = node.parentNode.insertBefore(dupNode, node.nextSibling);
                             
-                            // из первого набора условий убрать третий узел
+                            // remove the third node from the first set of conditions
                             var condemned = chNodes[2];
                             condemned.parentNode.removeChild(condemned);
-                            // из второго набора удаляем второй узел
+                            // remove the second node from the second rule set
                             condemned = dupChNodes[1];
                             condemned.parentNode.removeChild(condemned);
                             
-                            // объединить полученные узлы логикой and
+                            // combine the extracted nodes with "and" logic
                             var wrapper = op.svarxXML.createElement(TAG_BLOCK);
                             wrapper.setAttribute(ATTR_LOGIC, 'and');
                             wrapper = node.parentNode.insertBefore(wrapper, node);
@@ -345,7 +377,8 @@
                     }
                 }
 
-                // посчитать, сколько элементов ждёт на вход правило, чтоб потом уметь понять, всё ли мы нашли
+                // here we count how many elements the rule expects to process,
+                // so later we can see if everything was actually found
                 function countRuleElems(node) {
                     if (node.nodeName === TAG_RULE) {
                         if (node.getAttribute('for')) {
@@ -371,47 +404,83 @@
                 }
             }
 
-            // снимает ранее стоявшие на форме обработчики
+            // unbind all event handlers related to svarx
             function unbindHandlers() {
                 $form.unbind(eventNameSpace);
             }
             
-            // Назначает валидатор на форму
+            // assign validation to a form
             function bindHandlers() {
-                // обработчик-валидатор
+                // the handler that gets assigned
                 function handler(e) {
                     var validationResult = true,
                         wasPrevented = false,
+                        validateBlockId = op.validateBlockId,
+                        preprocessBlockId = op.preprocessBlockId,
                         checkPrevented = function(e) {
                             wasPrevented = e.isDefaultPrevented();
                         };
+
+                    /*
+
+                    If one has to use a subtree of the existing SVARX document for
+                    validation, that can be done either statically by specifying
+                    "validateBlockId" and "preprocessBlockId" field in options, or dynamically.
+
+                    Dynamic case has precedence over static definition in options.
+
+                    Pass object containing "validateBlockId" and "preprocessBlockId" fields
+                    as the LAST argument to the validation event handler when triggering it.
+
+                    If one of the fields is omitted, use main root preprocess or validate block.
+
+                    $('some.selector')
+                        .trigger('eventName', [arg1, arg2, ...,
+                            {validateBlockId: "myUniqueId", preprocessBlockId: "myUniqueId2" }
+                        ]);
+
+                    */
                     
-                    // такой метод назначения гарантирует, что обработчик
-                    // checkPrevented выполнится последним и мы сможем понять,
-                    // был ли предотвращён запуск SVARX-проверки
+                    if (arguments.length > 1) {
+                        // we have to temporary convert argument to an Object to be able
+                        // to check for a property on non-object elements (such as null, boolean) safely
+                        var argLast = Object(arguments[arguments.length - 1]);
+
+                        if (argLast.validateBlockId !== undefined) {
+                            validateBlockId = argLast.validateBlockId;
+                        }
+
+                        if (argLast.preprocessBlockId !== undefined) {
+                            preprocessBlockId = argLast.preprocessBlockId;
+                        }
+
+                    }
+
+                    // This way we guarantee that "checkPrevented" will be executed last
+                    // and we will be able to find if the event was prevented  by earlier handlers.
+                    // If it was, we must stop SVARX validation.
                     $form
                         .one('beforesvarx', checkPrevented)
                         .trigger('beforesvarx', [e.type]);
                     
                     if (wasPrevented) {
-                        // не выполнять SVARX-валидацию, не предотвращать событие
+                        // DO NOT run SVARX validation, DO NOT prevent event
                         return true;
                     }
                     
-                    // сбросим закешированные значения элементов формы (если форма не отмечена как неизменная)
+                    // drop form element cache (unless form was marked as immutable in options)
                     op.immutable || resetElsCaches();
-                    // препроцессинг уже можно выполнять
-                    preprocess();
-                    validationResult = validate(e.type);
+                    // we can start preprocessing now
+                    preprocess(preprocessBlockId);
+                    validationResult = validate(e.type, validateBlockId);
                     
                     $form
                        .one('aftersvarx', checkPrevented)
                        .trigger('aftersvarx', [validationResult, e.type]);
         
-                    // событие предотвращает e.preventDefault(), позванный из любого обработчика aftersvarx
-                    if (wasPrevented) {
-                        e.preventDefault();
-                    }
+                    // if any 'aftersvarx' event handler called e.preventDefault(),
+                    // this also means we have to prevent current event
+                    wasPrevented && e.preventDefault();
                 }
                 
                 var m = SVARX.methods[op.method] || {};
@@ -425,42 +494,51 @@
             }
 
 
-            // Препроцессинг данных формы. Происходит на реальных значениях (не на копии).
-            // Выполняется до валидации, но только в том случае, если валидация разрешена
-            function preprocess() {
-                function preprocessRule(rule) {
-                    var type = rule.getAttribute('type');
-                    
-                    type && $ruleEls(rule).each(function(i, el) {
-                        if (SVARX.isTextControl(el)  // препроцессинг работает только для текстовых контролов...
-                        && el.type.toLowerCase() !== 'file'  // не срабатывает на полях для загрузки файлов...
-                        && !el.readOnly) { // не срабатывает на readonly-полях...
-                            // ...а disabled-поля мы убрали ранее в $elsByRule
-                            (SVARX.processors[type] || SVARX.unknownPreprocessFactory(type))(el, ruleAsJSON(rule));
-                        }
-                    });
-                }
-        
-                var preprocessBlocks = filterTags(op.svarxXML.documentElement, 'preprocess'),
-                    curPreprocessBlock = preprocessBlocks[0] || null;
-                    
-                op.preprocessBlockId && $.each(preprocessBlocks, function(i) {
-                    if (preprocessBlocks[i].getAttribute('id') === op.preprocessBlockId) {
-                        curPreprocessBlock = preprocessBlocks[i];
-                        return false;
+            // Form values are preprocessed according to SVARX rules.
+            // This happens on real DOM elements, so there are some side effects in IE
+            // related to cursor position not restored correctly.
+            // Preprocessing happens before validation, and does not happen if validation was prevented.
+            function preprocess(preprocessBlockId) {
+                function preprocessRule(ruleNode) {
+                    if (!ruleNode) return false;
+
+                    switch(ruleNode.nodeName) {
+                        case TAG_BLOCK:
+                        case TAG_PREPROCESS:
+                            var ch = filterTags(ruleNode, TAG_RULE, TAG_BLOCK);
+
+                            for (var i = 0, j = ch.length; i < j; i++) {
+                                // recursive call
+                                preprocessRule(ch[i]);
+                            }
+                        break;
+
+                        case TAG_RULE:
+                            var type = ruleNode.getAttribute('type');
+
+                            type && $ruleEls(ruleNode).each(function(i, el) {
+                                if (SVARX.isTextControl(el)  // preprocessing works with text-based controls only...
+                                && el.type.toLowerCase() !== 'file'  // file upload controls are skipped...
+                                && !el.readOnly) { // ...readonly fields are skipped
+                                    // ...disabled fields were skipped earlier in $elsByRule(..)
+                                    (SVARX.processors[type] || SVARX.unknownPreprocessFactory(type))(el, ruleAsJSON(ruleNode));
+                                }
+                            });
+                        break;
                     }
-                });
-                
-                curPreprocessBlock && $.each(filterTags(curPreprocessBlock, TAG_RULE), function(i, el) {
-                    preprocessRule(el);
-                });
+                }
+
+                var preprocessNode = filterTags(op.svarxXML.documentElement, TAG_PREPROCESS)[0] || null,
+                    startNode = byId(preprocessBlockId, preprocessNode);
+
+                preprocessRule(startNode);
             }
 
-            // Главная валидирующая функция
-            function validate(eventType) {
-                // Рекурсивный обработчик правил валидации, вычисляет
-                // общий логический итог проверки и расставляет на XML-дереве
-                // маркеры для выполнения назначенных на ошибки действий
+            // main validating func
+            function validate(eventType, validateBlockId) {
+                // Recursive validation rule processor, produces final validation result
+                // by recursive iteration over the XML tree.
+                // Attaches markers directly to XML tree according with found errors
                 function processRule(ruleNode) {
                     if (!ruleNode) return false;
                     
@@ -470,11 +548,11 @@
                             logicStack.push(ruleCheck);
                         
                             if (!ruleCheck) {
-                                // ставим маркер выполнения действий для оповещения об ошибке
+                                // attach a marker that means "fire error here"
                                 ruleNode.setAttribute(ATTR_FIRE_ACTS, 1);
                             }
         
-                            break;
+                        break;
         
                         case TAG_BLOCK:
                         case TAG_VALIDATE:
@@ -483,7 +561,7 @@
                                 logic = ruleNode.getAttribute(ATTR_LOGIC) == 'or' ? '||' : '&&';
         
                                 for (var i = 0; i < childCount; i++) {
-                                    // рекурсивный вызов
+                                    // recursive call
                                     processRule(ch[i]);
                                 }
                         
@@ -493,87 +571,80 @@
                             }
                         
                             var thisRuleResult = (childCount > 0) ? (new Function('return (' + tmps.join(logic) + ')'))() : true;
-                            if (isAttrTrue(ruleNode, ATTR_INVERTED)) {
+                            if (childCount > 0 && isAttrTrue(ruleNode, ATTR_INVERTED)) {
                                 thisRuleResult = !thisRuleResult;
                             }
                             
-                            // запоминаем логический результат вычисления текущего набора правил
+                            // store current result
                             logicStack.push(thisRuleResult);
                             if (!thisRuleResult) {
-                                // ставим маркер выполнения действий для оповещения об ошибке
+                                // attach a marker that means "fire error here"
                                 ruleNode.setAttribute(ATTR_FIRE_ACTS, 1);
                             }
         
-                            break;
+                        break;
                     }
                 }
                 
-                // Выполняет те из действий, которые соответствуют
-                // реально случившимся ошибкам валидации
+                // Run actions that correspond to actually happened errors
                 function fireActions(ruleNode) {
                     if (!ruleNode || !ruleNode.getAttribute(ATTR_FIRE_ACTS)) return false;
                     ruleNode.removeAttribute(ATTR_FIRE_ACTS);
                     
-                    var nodename = ruleNode.nodeName;
-                    if (nodename == TAG_RULE || nodename == TAG_BLOCK || nodename == TAG_VALIDATE) {
-                        var errCode = ruleNode.getAttribute('onerror');
-                        
-                        // вызываем ошибку только если onerror был определён
-                        if (errCode) {
-                            // поддержка переопределения таргета ошибки
-                            $targetEls(ruleNode).trigger('svarxerror', [
-                                errCode,
-                                eventType,
-                                ruleAsJSON(ruleNode)
-                            ]);
-                        }
-        
-                        if (nodename !== TAG_RULE) {
-                            // рекурсивный вызов
-                            for (var i = 0, ch = filterTags(ruleNode, TAG_BLOCK, TAG_RULE), j = ch.length; i < j; i++) {
-                                fireActions(ch[i]);
+                    switch(ruleNode.nodeName) {
+                        case TAG_RULE:
+                        case TAG_BLOCK:
+                        case TAG_VALIDATE:
+                            var errCode = ruleNode.getAttribute('onerror');
+
+                            // cannot run error handler without onerror attribute present and non-empty
+                            if (errCode) {
+                                // allow error target to be redefined
+                                $targetEls(ruleNode).trigger('svarxerror', [
+                                    errCode,
+                                    eventType,
+                                    ruleAsJSON(ruleNode)
+                                ]);
                             }
-                        }
+
+                            if (ruleNode.nodeName !== TAG_RULE) {
+                                // recursive call
+                                for (var i = 0, ch = filterTags(ruleNode, TAG_BLOCK, TAG_RULE), j = ch.length; i < j; i++) {
+                                    fireActions(ch[i]);
+                                }
+                            }
+
+                        break;
                     }
                 }
         
-                // Общий результат валидации формы и стек результатов проверок
+                // Cumulative result of form validation and stack
+                // that contains intermediate validation results
                 var result = true,
                     logicStack = [],
-                    validateElems = filterTags(op.svarxXML.documentElement, TAG_VALIDATE),
-                    curValidateBlock = validateElems[0] || null;
-                
-                op.validateBlockId && $.each(validateElems, function(i) {
-                    if (validateElems[i].getAttribute('id') === op.validateBlockId) {
-                        curValidateBlock = validateElems[i];
-                        return false;
-                    }
-                });
-                
-                processRule(curValidateBlock);
+                    validateNode = filterTags(op.svarxXML.documentElement, TAG_VALIDATE)[0] || null,
+                    startNode = byId(validateBlockId, validateNode);
+
+                processRule(startNode);
                 
                 result = logicStack.pop();
-                if (!result) {
-                    fireActions(curValidateBlock);
-                }
+                !result && fireActions(startNode);
                 
                 return result;
             }
 
             function cloneXML(doc) {
-                if (window.ActiveXObject) {
-                    var emptyXMLDoc = new ActiveXObject('Msxml2.DOMDocument.3.0');
-                } else {
-                    var emptyXMLDoc = document.implementation.createDocument('', '', null);
-                }
+                var emptyXMLDoc = window.ActiveXObject ?
+                    new ActiveXObject('Msxml2.DOMDocument.3.0') :
+                    document.implementation.createDocument('', '', null);
 
                 emptyXMLDoc.appendChild(doc.documentElement.cloneNode(true));
                 return emptyXMLDoc;
             }
             
             function init() {
-                preprocessXML();  // препроцессинг XML - разворачиваем логические условия
-                bindHandlers();  // назначаем обработчики на форму
+                preprocessXML();  // XML preprocessing to unwrap some logical blocks
+                bindHandlers();  // assign handlers to a form
                 $form.trigger('svarxloaded', [cloneXML(op.svarxXML), op]);
             }
             
@@ -581,7 +652,8 @@
                 form = this,
                 $form = $(form);
             
-            // если метод не выбран, берём первый имеющийся
+            // if no error visualization method specified,
+            // use the first one available
             if (op.method === undefined) {
                 for (var m in SVARX.methods) {
                     op.method = m;
@@ -617,12 +689,12 @@
     };
 
     $.extend(SVARX, {
-        // версия библиотеки
-        version: 2.36,
+        // library version
+        version: 2.4,
         options: {
-            method: undefined,  // имя плагина визуализации валидации
-            bindTo: 'submit',  // на какое событие по умолчанию назначаем валидацию
-            jQueryAjax: {}  // доп. параметры для jQuery.ajax запроса
+            method: undefined,  // default error visualization plugin
+            bindTo: 'submit',  // the event name to bind the validation to (can be redefined)
+            jQueryAjax: {}  // additional parameters for jQuery.ajax request
         },
         isTextControl: function(el) {
             if (!el.type) {
@@ -643,7 +715,7 @@
                 case 'url':
                 case 'number':
                 
-                // Считаем их текстовыми
+                // these are text-like, so consider then textual
                 case 'range':
                 case 'color':
                 case 'date':
@@ -659,19 +731,29 @@
         },
         methods: {},
         rules: {
-            // deprecated, DO NOT USE.
-            // будет убрана из дефолтной поставки.
-            // такая валидация должна описываться кастомным правилом, нет универсального регэкспа
-            // для валидации e-mail адреса.
+            //
+            // DEPRECATED, use user-defined rules instead.
+            //
+            // "email" rule will be removed from default rule set.
+            // Since no one actually uses or wants RFC-based regexp validation,
+            // there's no point in providing any kind of simplified regexp.
+            // Most web services have additional restrictions on email validation.
+            //
+            // This rule must always be a custom rule. Maybe I'll move it to a separate file,
+            // to be included by anybody who just wants to "occasionally validate some emails" :-)
+            //
             email: function(els) {
                 return /^[a-z\d%_][a-z\d%_.&+\-]*\@([a-z\d][a-z\d\-]*\.)+[a-z]{2,10}$/i.test(els[0].value);
             },
         
             regexp: function(els, rule) {
-                // Мы можем проверять как совпадение с полным значением (в стиле Web Forms 2.0),
-                // так и по подстроке. Для этого используются разные атрибуты.
-                // Если нужна подстрока, надо использовать атрибут partmatch, если полное совпадение —
-                // match. Если указаны оба правила, будет проверено только match.
+                // We may need a full match (a-la Web Forms 2.0),
+                // or a substring match. To distinguish between these two cases,
+                // we use different attributes to specify the regexp itself.
+                // When regexp comes in "partmatch" attribute, we're looking for a substring match;
+                // otherwise, regexp is specified in the "match" attribute.
+                //
+                // When both attributes are provided, "match" has a precedence.
                 
                 var match = rule.match,
                     partMatch = rule.partmatch,
@@ -680,15 +762,21 @@
                     re,
                     execResult;
                     
-                // RegExp поддерживает только три флага, но флаг g не имеет для нас смысла
+                // RegExp constructor suports only 3 flags,
+                // but "g" is meaningless for us, and even harmful.
+                // So we accept "i" and "m" only.
                 flags = flags.toLowerCase().replace(/[^im]/g, '');
                 
-                // Т.к. в синтаксисе регулярных выражений могут быть ошибки,
-                // создаём объект через try
+                // RegExp constructor may throw errors on incorrect syntax,
+                // and since external files are always error-prone,
+                // we take advantage of try {...} catch {...} :-)
                 try {
                     if (match) {
                         re = new RegExp(match, flags);
                         execResult = re.exec(el.value);
+
+                        // To me it looks, so far, the easiest way to make sure
+                        // we have a full-string match:
                         return execResult ? execResult[0] === execResult.input : false;
                     } else if (partMatch) {
                         re = new RegExp(partMatch, flags);
@@ -701,7 +789,7 @@
                 }
             },
         
-            // для радиобаттонов и чекбоксов
+            // for radio buttons and checkboxes
             checked: function(els) {
                 var type = els[0].type.toLowerCase();
                 
@@ -710,7 +798,7 @@
                 } else return true;
             },
         
-            // для селектов, одиночных и множественных
+            // for select-boxes, single and multiple ones
             selected: function(els, rule) {
                 var option = parseInt(rule.option, 10),
                     el = els[0],
@@ -721,29 +809,34 @@
                 }
                 
                 if (el.selectedIndex === -1) {
-                    // ни одного элемента не выбрано, правило не срабатывает
+                    // no elements selected, the rule cannot proceed and returns true
                     return false;
                 }
                 
                 if (isNaN(option)) {
-                    // если одиночный селект, то какая-то опция точно выбрана.
-                    // если множественный, и мы на предыдущем шаге не вылетели,
-                    // то selectedIndex больше -1 и опять же правило проходит
+                    // if the select element is "select-one", then some options is already specified.
+                    //
+                    // if it is "select-multiple", and we didn't return on a previous step,
+                    // then selectedIndex is greater than -1, some of the options is chosen
+                    // and the rule passes.
                     return true;
                 }
 
                 if (!el.options[option]) {
-                    // если такой опции нет, она не выделена и правило проваливается
+                    // if an "option" is specified but does not exist,
+                    // it cannot be selected, and the rule fails.
                     return false;
                 }
                 
-                // проверять на наличие this.options[option] не надо, это делается выше
+                // el.options[option] exists, see above
                 return !!el.options[option].selected;
             },
         
-            // проверяет, что 2 или более значения полей формы
-            // равны между собой (как числа или как строки);
-            // также допускает проверку без учёта регистра
+            // check that 2 or more form fields
+            // have equal values (compared either as strings, or as float numbers);
+            //
+            // case-insensitive check is supported too
+            //
             eq: function(els, rule) {
                 var vals = [],
                     initial,
@@ -790,13 +883,12 @@
                     max = parseFloat(rule.max),
                     numVal = parseFloat(els[0].value);
 
-                if (isNaN(numVal) || (!isNaN(min) && numVal < min) || (!isNaN(max) && numVal > max)) {
-                    return false;
-                } else return true;
+                return !(isNaN(numVal) || (!isNaN(min) && numVal < min) || (!isNaN(max) && numVal > max));
             },
             
-            // требует, чтобы поле было непустым.
-            // работает только для текстовых полей -- для всех прочих не имеет смысла
+            // check that field is empty.
+            // works for textual fields only;
+            // for all other types it is meaningless and therefore evals to true
             required: function(els) {
                 return SVARX.isTextControl(els[0]) ? SVARX.nonEmpty(els[0]) : true;
             }

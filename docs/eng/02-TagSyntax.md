@@ -5,24 +5,28 @@ Basic rules are described by `<rule>` tags; rule sets and conditional validation
 
 Each time before validation starts, form field values are preprocessed using rules listed in `<preprocess/>` section (see below).
 
-You can store more than one `<validate/>` block in a single SVARX file; in this case, add a non-empty **id** attribute to each of your **validate** blocks and pass **validateBlockId** parameter to the jQuery plugin with the corresponding id.
+Внутри одного svarx-файла можно хранить только один блок &lt;validate&gt;, однако можно производить валидацию на основе подмножества существующих правил, указав уникальный в рамках документа атрибут **id** на любом элементе `<block>` или `<rule>`.
+В этом случае валидация будет происходить только по поддереву XML, начиная с выбранного по **id** элемента. В частности, это позволяет хранить правила более чем для одной формы, а также по необходимости вызывать валидации отдельных полей или групп полей, не производя валидации остальной части документа.
 
-#### rule ####
-The `<rule>` tag can be self-closing (short form) which is used mostly to describe validation rule for a single field, or act as a block-level container (full form) to describe validation for more than one field.
+О способах указания этого **id** подробнее смотрите в разделе о подключении JavaScript-реализации SVARX на проект.
 
-##### rule — short notation #####
-**Mandatory** attribute:
+#### Тег rule ####
+Тег `<rule>` имеет две формы: краткую (для описания валидации с участием одного поля) и полную (для описания валидации с участием более одного поля, когда валидирующее правило проверяет несколько полей сразу).
 
-* **type** — specify validation type here
+##### Краткая форма тега rule #####
+Имеет **обязательный** атрибут:
 
-**Optional** attributes which can be used with any `<rule>` tag regardless of validation type it defines:
+* **type** — имя (алиас) валидирующего правила.
 
-* **for** — the name of a form field to apply the rule to; if not specified, all existing form elements are passed to a validation function. Omitting this attribute is an effective way to describe user defined data-independent validation rules.
-* **item** — a zero-based index of an element in case you have more than one form element with the same name.
-* **onerror** — error id, the "name" of error that identifies this particular rule; error handlers will get this id and use it to present the error to the user. Since this id may be used to bind visualization with error data, it can become an HTML class name, file name etc., so it's not recommended to use anything except Latin letters and digits to create these ids.
-* **errtarget** — the name of a form field that becomes responsible for the error on the presentation layer, also the target element of SVARX error handler when it is called. By default, this value is the same as specified in the **for** attribute, but you can redefine this. Useful for complex forms where actual validated fields and not always the fields that explain validation errors to the user. For example, you may have a field to input the phone number and parse it dynamically into country code, city code, and local number, placing each of them into a separate hidden input. You may want to validate hidden inputs but provide error message (red highlight etc.) on the original field, which would be an *errtarget** in this case.  
+**Опциональные** атрибуты, общие для всех тегов `<rule>`:
+
+* **for** — имя поля формы, к которому применяется правило. Если этот атрибут не указан, то на вход валидирующему правилу придут все имеющиеся элементы формы.
+* **item** — если в форме несколько элементов с одинаковым именем, то item позволяет указать номер элемента (нумерация с нуля).
+* **onerror** — идентификатор ошибки, которая будет вызвана в случае нарушения правила. Может состоять из латинских букв, подчёркиваний и тире.
+* **errtarget** — имя поля формы, на котором реально будет вызван обработчик SVARX-ошибки для данного правила. По умолчанию, это событие выполняется на поле, указанном внутри атрибута for, но данный атрибут позволяет переопределить это поведение. Этот атрибут используется для семантического соотнесения ошибки с другим элементом, нежели тот, на кототом определёно правило валидации.
 * **errtargetitem** — аналог атрибута **item**, но относится к **errtarget**. Для случая, когда указан **errtarget** и в форме есть несколько элементов с подобным именем, использование **errtargetitem** позволяет указать номер элемента. Нумерация с нуля.
 * **inverted="yes|no"** — логическое **not** для правила, меняющее результат проверки на противоположный
+* **id** - позволяет указать уникальный идентификатор правила, чтобы его можно было вызвать отдельно; см. раздел про инициализацию SVARX в JavaScript.
 
 Прочие атрибуты тега `<rule>` зависят от указанного типа проверки.
 
@@ -42,7 +46,7 @@ The `<rule>` tag can be self-closing (short form) which is used mostly to descri
 ```xml
 <block onerror="epic_fail">
     <errtarget alias="children" />
-    
+
     <rule for="login" type="email" />
     <rule for="password" type="regexp" match="[0-9a-z]+" flags="i" errtarget="password2" />
 
@@ -63,7 +67,8 @@ The `<rule>` tag can be self-closing (short form) which is used mostly to descri
 * **logic="and|or|if"** — логика объединения вложенных правил <rule> (по умолчанию — and). Значение **if** имеет особую семантику, о ней ниже.
 * **onerror**  — идентификатор ошибки, которая будет вызвана в случае, если проверка блока провалилась.
 * **errtarget**, **errtargetitem** — см. выше. Этот атрибут особенно полезен именно для `<block>`, т.к. он семантически не привязан ни к одному полю формы, а это не всегда хорошо.
-* **inverted="yes|no"**  — аналогично <rule>, но меняет логическое значение результата блока целиком 
+* **inverted="yes|no"**  — аналогично <rule>, но меняет логическое значение результата блока целиком
+* **id** - позволяет указать уникальный идентификатор блока, чтобы его можно было вызвать отдельно; см. раздел про инициализацию SVARX в JavaScript.
 
 У тега `<block>`, так же как и у тега `<rule>`, есть полная форма записи (выше описана именно краткая). Полная форма отличается тем, что запрещает использование атрибутов **errtarget** B **errtargetitem**, но разрешает использование вложенных тегов &lt;errtarget&gt;, аналогично полной форме записи тега `<rule>`.
 
@@ -95,7 +100,7 @@ The `<rule>` tag can be self-closing (short form) which is used mostly to descri
 />
 
 ```
-Объединение правил в блоки не используется, но можно задавать несколько полей с использованием расширенного синтаксиса тега `<rule>` (см. соответствующий раздел).
+Объединение правил в блоки возможно, но может понадобиться только в случае указания уникального **id** на блоке для последующего отдельного вызова указанной части препроцессинга (см. раздел про инициализацию SVARX в JavaScript). Также можно задавать несколько полей с использованием расширенного синтаксиса тега `<rule>` (см. соответствующий раздел).
 
 Препроцессинг выполняется с соблюдением указанного порядка полей и обработок.
 Неизвестные типы обработок игнорируются.
@@ -116,5 +121,4 @@ The `<rule>` tag can be self-closing (short form) which is used mostly to descri
 
 ```
 
-Внутри одного svarx-файла можно хранить несколько блоков &lt;preprocess&gt;. В этом случае нужно каждому из них указывать уникальный идентификатор через атрибут **id**.
-По умолчанию будет использован первый по порядку блок, но при инцииализации jQuery-SVARX-плагина в опциях можно передать ключ **preprocessBlockId**, и в этом случае будет использован блок с соответствующим **id**.
+Внутри одного svarx-файла можно хранить только один блок &lt;preprocess&gt;.

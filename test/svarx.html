@@ -283,6 +283,54 @@ $(function() {
         }, 'svarx')});
     console.groupEnd('combined_as_json');
 
+    console.group('selected-ids');
+    $('form')
+        .one('svarxloaded', function() {
+            this.reset();
+            var $f = $(this);
+            $f.find('input[name=hidden]').val('');
+            
+            t.msg = ['hidden-required'];
+            t.isValid = false;
+            $f
+                .trigger('submit', [{validateBlockId: 'hidden-required', preprocessBlockId: 'never-exists'}])
+                .trigger('test', [{validateBlockId: 'hidden-required', preprocessBlockId: 'trim-hidden'}]);
+
+
+            $f.find('input[name=hidden]').val('  100500test  ');
+            t.msg = [];
+            t.isValid = true;
+            $f.trigger('submit', [{validateBlockId: 'hidden-100500', preprocessBlockId: 'trim-hidden'}]);
+
+            $f.find('input[name=hidden]').val('  100500test  ');
+            t.msg = ['hidden-100500'];
+            t.isValid = false;
+            $f.trigger('submit', [{validateBlockId: 'hidden-100500', preprocessBlockId: 'empty-preprocess'}]);
+
+            $f.find('input[name=hidden]').val('  100500test  ');
+            t.msg = ['hidden-100500'];
+            t.isValid = false;
+            $f.trigger('submit', [{validateBlockId: 'hidden-100500', preprocessBlockId: 'corrupt-hidden'}]);
+
+            $f.find('input[name=hidden]').val('  100500test  ');
+            t.msg = ['hidden-100500', 'no-select', 'total'];
+            t.isValid = false;
+            $f.trigger('submit', [{validateBlockId: 'root'}]);
+
+            $f.find('input[name=hidden]').val('  100500test  ');
+            t.msg = ['no-select', 'total'];
+            t.isValid = false;
+            $f.trigger('submit', [{preprocessBlockId: 'trim-hidden'}]);
+
+            $f.find('input[name=hidden]').val('  100500test  ');
+            t.msg = ['no-select'];
+            t.isValid = false;
+            $f.trigger('submit', [{validateBlockId: 'block-id'}]);
+            
+        })
+        .svarx({svarxXML: xml('selected-ids')});
+    console.groupEnd('selected-ids');
+
 });
 </script>
 </head>
@@ -401,6 +449,35 @@ $(function() {
                     <el name="text" item="1" />
                 </rule>
                 
+            </validate>
+        </svarx>
+    </textarea>
+
+    <textarea id="selected-ids" class="svarx">
+        <svarx>
+            <preprocess>
+                <rule id="trim-hidden" for="hidden" type="trim" />
+                <block id="corrupt-hidden">
+                    <rule for="hidden" type="parseint" />
+                </block>
+
+                <block><block id="empty-preprocess"></block></block>
+            </preprocess>
+            <validate id="root" onerror="total">
+                
+                <rule id="hidden-required" for="hidden" type="required" onerror="hidden-required" />
+                <rule id="hidden-100500" for="hidden" type="regexp" match="100500test" onerror="hidden-100500" />
+
+                <block>
+                    <block>
+                        <block id="block-id">
+
+                            <rule for="select-single" type="selected" option="2" onerror="no-select" />
+                            
+                        </block>
+                    </block>
+                </block>
+
             </validate>
         </svarx>
     </textarea>
