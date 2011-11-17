@@ -1,7 +1,7 @@
 /**
  *
  * @author         Max A. Shirshin (ingdir@yandex-team.ru)
- * @version        2.4
+ * @version        2.41
  * @name           SVARX (Semantical VAlidation Rulesets in XML)
  * @description   jQuery plugin for web form validation using SVARX rule descriptions
  * 
@@ -64,8 +64,7 @@
     // if no id is provided, return root.
     //
     function byId(id, root) {
-        if (!root) return null;
-        if (!id) return root;
+        if (!root || !id) return null;
 
         var tagNames = [TAG_BLOCK, TAG_RULE];
 
@@ -416,7 +415,9 @@
                     var validationResult = true,
                         wasPrevented = false,
                         validateBlockId = op.validateBlockId,
+                        validateBlockIdDefined = 'validateBlockId' in op,
                         preprocessBlockId = op.preprocessBlockId,
+                        preprocessBlockIdDefined = 'preprocessBlockId' in op,
                         checkPrevented = function(e) {
                             wasPrevented = e.isDefaultPrevented();
                         };
@@ -446,12 +447,14 @@
                         // to check for a property on non-object elements (such as null, boolean) safely
                         var argLast = Object(arguments[arguments.length - 1]);
 
-                        if (argLast.validateBlockId !== undefined) {
+                        if ('validateBlockId' in argLast) {
                             validateBlockId = argLast.validateBlockId;
+                            validateBlockIdDefined = true;
                         }
 
-                        if (argLast.preprocessBlockId !== undefined) {
+                        if ('preprocessBlockId' in argLast) {
                             preprocessBlockId = argLast.preprocessBlockId;
+                            preprocessBlockIdDefined = true;
                         }
 
                     }
@@ -471,8 +474,8 @@
                     // drop form element cache (unless form was marked as immutable in options)
                     op.immutable || resetElsCaches();
                     // we can start preprocessing now
-                    preprocess(preprocessBlockId);
-                    validationResult = validate(e.type, validateBlockId);
+                    preprocessBlockIdDefined ? preprocess(preprocessBlockId) : preprocess();
+                    validationResult = validateBlockIdDefined ? validate(e.type, validateBlockId) : validate(e.type);
                     
                     $form
                        .one('aftersvarx', checkPrevented)
@@ -498,7 +501,7 @@
             // This happens on real DOM elements, so there are some side effects in IE
             // related to cursor position not restored correctly.
             // Preprocessing happens before validation, and does not happen if validation was prevented.
-            function preprocess(preprocessBlockId) {
+            function preprocess() {
                 function preprocessRule(ruleNode) {
                     if (!ruleNode) return false;
 
@@ -529,13 +532,15 @@
                 }
 
                 var preprocessNode = filterTags(op.svarxXML.documentElement, TAG_PREPROCESS)[0] || null,
-                    startNode = byId(preprocessBlockId, preprocessNode);
+                    // if preprocessBlockId is passed, even as null or undefined, use it;
+                    // otherwise, start from the root node
+                    startNode = arguments.length > 0 ? byId(arguments[0], preprocessNode) : preprocessNode;
 
                 preprocessRule(startNode);
             }
 
             // main validating func
-            function validate(eventType, validateBlockId) {
+            function validate(eventType) {
                 // Recursive validation rule processor, produces final validation result
                 // by recursive iteration over the XML tree.
                 // Attaches markers directly to XML tree according with found errors
@@ -623,11 +628,14 @@
                 var result = true,
                     logicStack = [],
                     validateNode = filterTags(op.svarxXML.documentElement, TAG_VALIDATE)[0] || null,
-                    startNode = byId(validateBlockId, validateNode);
+                    // if validateBlockId is passed, even as null or undefined, use it;
+                    // otherwise, start from the root node.
+                    startNode = arguments.length > 1 ? byId(arguments[1], validateNode) : validateNode;
 
                 processRule(startNode);
                 
-                result = logicStack.pop();
+                // when validating against an empty rule set, result still remains true
+                if (logicStack.length > 0) result = logicStack.pop();
                 !result && fireActions(startNode);
                 
                 return result;
@@ -690,7 +698,7 @@
 
     $.extend(SVARX, {
         // library version
-        version: 2.4,
+        version: 2.41,
         options: {
             method: undefined,  // default error visualization plugin
             bindTo: 'submit',  // the event name to bind the validation to (can be redefined)

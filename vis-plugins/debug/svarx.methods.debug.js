@@ -6,8 +6,8 @@
         ).sort().join('#'),
             errorsExpected = d.expect.msg.sort().join('#');
         
-        console.assert(errorsFact === errorsExpected);
-        console.assert(d.isValid === d.expect.isValid);
+        console.assert(errorsFact === errorsExpected, 'Number of errors doesn\'t match');
+        console.assert(d.isValid === d.expect.isValid, 'Validation result is NOT as expected');
         console.log(errorsFact, '- FACT');
         console.log(errorsExpected, '- EXPECTED');
     }

@@ -327,6 +327,21 @@ $(function() {
             t.isValid = false;
             $f.trigger('submit', [{validateBlockId: 'block-id'}]);
             
+            $f.find('input[name=hidden]').val('  100500test  ');
+            t.msg = [];
+            t.isValid = true;
+            $f.trigger('submit', [{validateBlockId: null}]);
+
+            $f.find('input[name=hidden]').val('  100500test  ');
+            t.msg = ['hidden-100500'];
+            t.isValid = false;
+            $f.trigger('submit', [{validateBlockId: 'hidden-100500', preprocessBlockId: null}]);
+        
+            $f.find('input[name=hidden]').val('  100500test  ');
+            t.msg = [];
+            t.isValid = true;
+            $f.trigger('submit', [{validateBlockId: 'hidden-100500', preprocessBlockId: 'trim-hidden'}]);
+
         })
         .svarx({svarxXML: xml('selected-ids')});
     console.groupEnd('selected-ids');
