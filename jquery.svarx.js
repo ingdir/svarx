@@ -1,7 +1,7 @@
 /**
  *
  * @author         Max A. Shirshin (ingdir@yandex-team.ru)
- * @version        2.41
+ * @version        2.42
  * @name           SVARX (Semantical VAlidation Rulesets in XML)
  * @description   jQuery plugin for web form validation using SVARX rule descriptions
  * 
@@ -642,11 +642,16 @@
             }
 
             function cloneXML(doc) {
-                var emptyXMLDoc = window.ActiveXObject ?
-                    new ActiveXObject('Msxml2.DOMDocument.3.0') :
-                    document.implementation.createDocument('', '', null);
-
+                var emptyXMLDoc;
+                
+                try {
+                    emptyXMLDoc = document.implementation.createDocument('', '', null);
+                } catch(e) {
+                    emptyXMLDoc = new ActiveXObject('Msxml2.DOMDocument.3.0');
+                }
+                
                 emptyXMLDoc.appendChild(doc.documentElement.cloneNode(true));
+                
                 return emptyXMLDoc;
             }
             
@@ -698,7 +703,7 @@
 
     $.extend(SVARX, {
         // library version
-        version: 2.41,
+        version: 2.42,
         options: {
             method: undefined,  // default error visualization plugin
             bindTo: 'submit',  // the event name to bind the validation to (can be redefined)

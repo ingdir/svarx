@@ -23,9 +23,13 @@
      * @return XML Document
      */
     $.json2xmlDoc = function(json, tagName) {
-        var xmlDoc = window.ActiveXObject
-            ? new ActiveXObject('Msxml2.DOMDocument.3.0')
-            : document.implementation.createDocument('', '', null);
+        var xmlDoc;
+        
+        try {
+            xmlDoc = document.implementation.createDocument('', '', null);
+        } catch(e) {
+            xmlDoc = new ActiveXObject('Msxml2.DOMDocument.3.0');
+        }
 
         try {
             convertToXml(xmlDoc, json, tagName);
