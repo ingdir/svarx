@@ -1,7 +1,7 @@
 /**
  *
  * @author         Max A. Shirshin (ingdir@yandex-team.ru)
- * @version        2.42
+ * @version        2.43
  * @name           SVARX (Semantical VAlidation Rulesets in XML)
  * @description   jQuery plugin for web form validation using SVARX rule descriptions
  * 
@@ -644,13 +644,17 @@
             function cloneXML(doc) {
                 var emptyXMLDoc;
                 
+                // for IE10, ActiveXObject is broken but document.implementation is OK.
+                // for IE9 edge, document.implementation seems to work but emptyXMLDoc.appendChild breaks with HIERARCHY_REQUEST_ERR.
+                // thus, the following implementation:
                 try {
                     emptyXMLDoc = document.implementation.createDocument('', '', null);
+                    // in IE9, the following line fails:
+                    emptyXMLDoc.appendChild(doc.documentElement.cloneNode(true));
                 } catch(e) {
                     emptyXMLDoc = new ActiveXObject('Msxml2.DOMDocument.3.0');
+                    emptyXMLDoc.appendChild(doc.documentElement.cloneNode(true));
                 }
-                
-                emptyXMLDoc.appendChild(doc.documentElement.cloneNode(true));
                 
                 return emptyXMLDoc;
             }
@@ -703,7 +707,7 @@
 
     $.extend(SVARX, {
         // library version
-        version: 2.42,
+        version: 2.43,
         options: {
             method: undefined,  // default error visualization plugin
             bindTo: 'submit',  // the event name to bind the validation to (can be redefined)
