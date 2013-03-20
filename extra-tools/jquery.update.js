@@ -15,7 +15,7 @@
         // селектор, по которому выбираем элементы, на которых будем отслеживать
         // событие обновления значения, т.е. которые будем поллить в реальном
         // времени
-        elementSelector = 'input[type=text],input[type=search],input[type=hidden],textarea',
+        elementSelector = 'input[type=text],input[type=search],input[type=hidden],input[type=password],textarea',
         timeoutId,
         
         // jQuery-объект для хранения списка элементов, которые поллим
