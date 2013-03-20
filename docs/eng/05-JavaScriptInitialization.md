@@ -105,7 +105,7 @@ $('form').trigger(
         param1,
         param2,
         {
-            validationBlockId: 'unique-id',
+            validateBlockId: 'unique-id',
             preprocessBlockId: 'unique-id'
         }
     ]
