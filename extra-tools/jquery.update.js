@@ -1,141 +1,197 @@
 /**
- * Плагин для отслеживания любых изменений на текстовых элементах форм.
  *
- * (c) Max Shirshin и компания Яндекс, http://www.yandex.ru
+ * @author Max Shirshin
+ * @description Plugin to track any type of change on any element, with jQuery "native" event API, based on polling
+ * @version 2.0
  *
  */
 
 (function ($, undefined) {
     var eventName = 'update',
         
-        // ключи для .data(), на которых храним специфические свойства
-        dataKey = 'update:prev',
+        // keys for .data() to associate some internal properties with
+        valueCache = 'update:prev',
         isTracked = 'update:istracked',
         
-        // селектор, по которому выбираем элементы, на которых будем отслеживать
-        // событие обновления значения, т.е. которые будем поллить в реальном
-        // времени
-        elementSelector = 'input[type=text],input[type=search],input[type=hidden],input[type=password],textarea',
         timeoutId,
+        cacheTimeoutId,
         
-        // jQuery-объект для хранения списка элементов, которые поллим
-        $inputs,
+        // jQuery object to store the polled elements
+        $pool = $(),
 
-        // инициализируем счётчик обхода списка объектов поллинга
+        // jQuery object to store the original elements the handlers are attached to
+        $source = $(),
+
+        // initialize the polling counter
         counter = -1,
 
-        // сколько элементов мы уже обошли в рамках 1 цикла поллинга
-        aggregated = 0;
+        // how many elements were polled in a polling round
+        aggregated = 0,
 
-    // Фция-поллер
-    function poll(mozDelay) {
-        // Выполняем один цикл аггрегированного поллинга.
+        // default options
+        cfg = {},
+        defaults = {
+            // polling interval
+            delay: 100,  // msec
+            // how often the cache should be updated
+            cacheTimeout: 2000,
+            // how many elements may be queried in a polling round
+            aggregateNum: 5,
+            // jQuery selector to choose the elements to be polled
+            elementSelector: 'input,textarea,select',
+            // function to determine the value of an element;
+            // accepts DOM element as a parameter
+            valFn: function(el) { return $(el).val() },
+            // function to determine whether two values are equal or not
+            eqFn: function(oldVal, newVal) {
+                return oldVal === newVal;
+            }
+        };
+
+    // polling function
+    function poll() {
+        // one round of aggregated polling
         //
-        // Не закладываемся слепо на aggregateNum, т.к. его нет смысла делать больше,
-        // чем число элементов в полл-пуле
-        // 
-        while (++aggregated <= Math.min($inputs.size(), $.fn[eventName].aggregateNum)) {
-            // Эта строчка обеспечивает зацикливание обхода и сброс в ноль, если дошли до конца
-            // или нужный элемент не найден (удалён из документа или отфильтрован нами же
-            var el = $inputs.get(++counter) || $inputs.get(counter = 0);
+        // aggregateNum may still be more than the actual number of elements to poll,
+        // thus an extra check
+        while (++aggregated <= Math.min($pool.length, cfg.aggregateNum)) {
+            var el = $pool.get(++counter) || $pool.get(counter = 0);
             if (el) {
-                //@debug console.log(el, new Date().getTime());
-                processEvent.call(el);
+                processEvent(el);
             }
         }
-        
-        // В Mozilla на вход первым аргументом придёт задержка выполнения
-        // в миллисекундах. Наличие такой задержки -- тревожный симптом,
-        // и когда она достигает половины нашего собственного интервала поллинга,
-        // мы откладываем следующее выполнение на бОльшее время
+
         aggregated = 0;
-        timeoutId = setTimeout(poll, $.fn[eventName].delay + (mozDelay > $.fn[eventName].delay/2 ? mozDelay : 0));
+        timeoutId = setTimeout(poll, cfg.delay);
     }
     
-    // смотрим, изменилось ли значение элемента
-    function processEvent() {
-        var el = this,
-            cachedVal = $.data(el, dataKey);
+    // check whether the actual value has changed
+    function processEvent(el) {
+        var cachedVal = $.data(el, valueCache),
+            val = cfg.valFn(el);
 
         if (cachedVal === undefined) {
             // first run, cache value
-            $.data(el, dataKey, el.value);
-        } else if (cachedVal !== el.value) {
+            $.data(el, valueCache, val);
+        } else if (! cfg.eqFn(cachedVal, val)) {
             $(el)
-                .data(dataKey, el.value)
+                .data(valueCache, val)
                 .trigger(eventName);
         }
     }
 
-    // классический шорткат-обёртка, как у прочих событий
+    function refreshCache() {
+        // filter out dead elements
+        $pool = $pool.filter(function() {
+            // elements removed from DOM shouldn't be polled anymore
+            return $.contains(document.documentElement, this);
+        });
+
+        $source = $source.filter(function() {
+            // elements removed from DOM shouldn't be polled anymore
+            return $.contains(document.documentElement, this);
+        });
+
+        $source.each(function() {
+            addToPolling(this);
+        });
+
+        // schedule next run
+        cacheTimeoutId = setTimeout(refreshCache, cfg.cacheTimeout);
+
+        if ($pool.length === 0 && $source.length === 0) {
+            clearTimeout(timeoutId);
+            clearTimeout(cacheTimeoutId);
+            timeoutId = cacheTimeoutId = undefined;
+        }
+    }
+    
+    function addToPolling(el) {
+        var $newElems = $getPolled(el);
+        // add elements to the polling list, jQuery cares for the uniqueness
+        $pool = $pool ? $pool.add($newElems) : $newElems;
+    }
+
+    function increaseListenerCount(el) {
+        $getPolled(el).each(function() {
+            var trackedNum = $.data(this, isTracked) || 0;
+            $.data(this, isTracked, trackedNum + 1);
+        });
+    }
+
+    // see which elements are being polled for this element.
+    // it can either be the element itself or its descendants (if event delegation was used)
+    function $getPolled(el) {
+        var $el = $(el);
+
+        return $el
+            .find(cfg.elementSelector)
+            .add( $el.filter(cfg.elementSelector) );
+    }
+
+    // provide a wrapper function similar to other events
     $.fn[eventName] = function(fn) {
         return fn ? this.bind(eventName, fn) : this.trigger(eventName);
     };
-    // интервал поллинга элементов
-    $.fn[eventName].delay = 100;  // msec
-    // сколько элементов можно поллить одновременно за 1 проход
-    $.fn[eventName].aggregateNum = 5;
-  
-    $.event.special[eventName] = {
-        // один раз для каждого уникального DOM-элемента
-        setup: function() {
-            var $this = $(this),
-                $newElems = $this
-                    .find(elementSelector)    // раз...
-                    .andSelf()                // два...
-                    .filter(elementSelector); // три => спец.магия для выборки в стиле "текущий + все потомки"
-                    
-                $newElems.each(function() {
-                    $.data(this, dataKey, this.value);
-                        
-                    // скольким фциям-слушателям интересно поллить этот объект
-                    //
-                    // когда число заинтересованных станет 0, элемент можно будет
-                    // удалить из поллинг-пула
-                    // 
-                    var trackedNum = $.data(this, isTracked) || 0;
-                    $.data(this, isTracked, trackedNum + 1);
-                });
-            
-            // добавляем элементы к списку для поллинга, jQuery обеспечивает их уникальность
-            $inputs = $inputs ? $inputs.add($newElems) : $newElems;
-            // запускаем поллинг
-            (timeoutId !== undefined) || poll();
-        },
-        teardown: function() {
-            if ($inputs) {
-                var $this = $(this),
-                    // смотрим, какие элементы поллятся для выбранного DOM-элемента.
-                    // может поллиться либо сам элемент, либо его потомки (если мы использовали
-                    // делегирование событий при bind)
-                    $trackedElems = $this
-                        .find(elementSelector)
-                        .andSelf()
-                        .filter(elementSelector);
-                
-                // для всех участников поллинга мы уменьшаем на 1 число заинтересованных в поллинге
-                $trackedElems.each(function() {
-                    var currentTrackedNum = $.data(this, isTracked) || 0;
-                    $.data(this, isTracked, Math.max(currentTrackedNum - 1, 0));
-                });
 
-                $inputs = $inputs.not(this).filter(function() {
-                    //@debug console.log($.data(this, isTracked));
-                    
-                    // элемент подходит, если у него есть хотя бы 1 заинтересованный слушатель
-                    return $.data(this, isTracked) > 0;
-                });
-
-                $this
-                    .removeData(dataKey)
-                    .removeData(isTracked);
-
-                // если поллить больше некого, поллинг надо остановить
-                if ($inputs.size() == 0) {
-                    (timeoutId !== undefined) && clearTimeout(timeoutId);
-                    timeoutId = undefined;
-                }
+    // define API
+    $.extend($.fn[eventName], {
+        config: function(c) {
+            if (c) {
+                $.extend(cfg, c);
+            } else {
+                return $.extend({}, cfg);
             }
+        },
+
+        reset: function() {
+            $.extend(cfg, defaults);
+        },
+
+        debug: function() {
+            return [$pool, $source];
+        }
+    });
+
+    // initialize default config
+    $.fn[eventName].reset();
+
+    $.event.special[eventName] = {
+
+        setup: function() {
+            $source = $source.add(this);
+            addToPolling(this);
+        },
+
+        add: function() {
+            increaseListenerCount(this);
+            // start polling
+            timeoutId || poll();
+            // start refreshing cache periodically
+            cacheTimeoutId || refreshCache();
+        },
+
+        remove: function() {
+            var $trackedElems = $getPolled(this);
+
+            // for each polled element, decrease the number of listeners interested in its polling
+            $trackedElems.each(function() {
+                var currentTrackedNum = $.data(this, isTracked) || 0;
+                $.data(this, isTracked, Math.max(currentTrackedNum - 1, 0));
+            });
+
+            $pool = $pool.filter(function() {
+                // element must stay if there is at least one listener interested
+                return $.data(this, isTracked) > 0;
+            });
+        },
+
+        teardown: function() {
+            $source = $source.not(this);
+            // this is the last event handler for this element, so we remove .data() properties
+            $(this)
+                .removeData(valueCache)
+                .removeData(isTracked);
         }
     };
 

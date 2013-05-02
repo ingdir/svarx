@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>Test page for jquery.update.js plugin</title>
+<style>
+    body {
+        font: normal 15px Arial, sans-serif;
+    }
+
+    form {
+        width: 300px;
+        height: auto;
+        padding: 50px;
+
+        float: left;
+
+        background-color: #eee;
+    }
+
+    .stencils {
+        width: 300px;
+        padding: 50px;
+        float: left;
+
+        background-color: #eeb;
+    }
+
+    .stencils .remove {
+        display: none;
+    }
+
+    .hide {
+        display: none;
+    }
+
+    .remove {
+        display: inline-block;
+        width: 16px;
+        height: 16px;
+
+        text-align: center;
+
+        cursor: pointer;
+
+        color: red;
+        background-color: #fff;
+    }
+
+</style>
+<script src="http://ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
+<script src="../extra-tools/jquery.update.js"></script>
+<script>
+$(function() {
+    $('.add').click(function() {
+        var what = '.' + $(this).attr('data-add');
+        $('form').append( $('.stencils').find(what).clone() );
+    });
+
+    var i = 0;
+    $('.deleg').click(function() {
+        $('form').on('update.deleg' + i, (function(i) {
+            return function(e) {
+                console.log('Handler ' + i + ' on', e.target);
+            };
+        })(i));
+        $('.to-remove').append('<button class="unbind" data-num="' + i + '">Unbind deleg. handler ' + i + '</button>');
+        i++;
+    });
+
+    $('.direct').click(function() {
+        $('form').find('input').on('update.direct' + i, (function(i) {
+            return function(e) {
+                console.log('Direct handler ' + i + ' on', e.target);
+            };
+        })(i));
+        $('.to-remove').append('<button class="unbind" data-num="' + i + '">Unbind direct handler ' + i + '</button>');
+        i++;
+    });
+
+    $('.stencils').on('click', '.unbind', function(e) {
+        var what = $(e.target).attr('data-num');
+        $('form').off('update.deleg' + what);
+        $('input').off('update.direct' + what);
+        $(e.target).remove();
+    });
+
+    $('form').on('click', '.remove', function(e) {
+        $(this).parent().remove();
+    });
+
+    $('.pool').click(function() {
+        console.log('Pool:', $.fn.update.debug()[0].toArray());
+    });
+
+    $('.source').click(function() {
+        console.log('Source:', $.fn.update.debug()[1].toArray());
+    });
+
+});
+</script>
+</head>
+<body>
+    <form></form>
+
+    <div class="stencils">
+
+        <button class="add" data-add="text">Add text field</button>
+        <button class="add" data-add="password">Add password field</button>
+        <button class="add" data-add="hidden">Add hidden field</button>
+        <button class="add" data-add="select">Add select</button>
+        <button class="add" data-add="textarea">Add text area</button>
+
+        <button class="deleg">Attach new handler to the FORM</button>
+        <button class="direct">Attach new handler to INPUTS</button>
+
+        <div class="to-remove"></div>
+
+        <button class="pool">Show polling pool</button>
+        <button class="source">Show source pool</button>
+
+        <div class="hide">
+            <div class="text">
+                <input type="text" />
+                <div class="remove">×</div>
+            </div>
+            <div class="password">
+                <input type="password" />
+                <div class="remove">×</div>
+            </div>
+
+            <div class="hidden">
+                hidden
+                <input type="hidden" />
+                <div class="remove">×</div>
+            </div>
+
+            <div class="select">
+                <select>
+                    <option value="1">Option 1</option>
+                    <option value="2">Option 2</option>
+                    <option value="3">Option 3</option>
+                </select>
+                <div class="remove">×</div>
+            </div>
+
+            <div class="textarea">
+                <textarea></textarea>
+                <div class="remove">×</div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
