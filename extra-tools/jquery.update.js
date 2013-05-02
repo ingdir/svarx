@@ -107,9 +107,8 @@
     }
     
     function addToPolling(el) {
-        var $newElems = $getPolled(el);
         // add elements to the polling list, jQuery cares for the uniqueness
-        $pool = $pool ? $pool.add($newElems) : $newElems;
+        $pool = $pool.add($getPolled(el));
     }
 
     function increaseListenerCount(el) {
