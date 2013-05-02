@@ -1,6 +1,7 @@
 ### jquery.update.js ###
 
 This plugin add a new **update** event support to jQuery on a native level.
+Compatibility: jQuery 1.4+
 
 By default, this event occurs on form controls (inputs, textareas, select boxes) whenever the value of a field changes (compared to a previously tracked value).
 
