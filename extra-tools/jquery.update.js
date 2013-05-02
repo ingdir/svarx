@@ -11,7 +11,6 @@
         
         // keys for .data() to associate some internal properties with
         valueCache = 'update:prev',
-        isTracked = 'update:istracked',
         
         timeoutId,
         cacheTimeoutId,
@@ -70,8 +69,8 @@
         var cachedVal = $.data(el, valueCache),
             val = cfg.valFn(el);
 
-        if (cachedVal === undefined) {
-            // first run, cache value
+        if (cachedVal === undefined || cfg.eqFn(cachedVal, val)) {
+            // cache value
             $.data(el, valueCache, val);
         } else if (! cfg.eqFn(cachedVal, val)) {
             $(el)
@@ -81,20 +80,17 @@
     }
 
     function refreshCache() {
+        // empty the polling pool
+        $pool = $();
         // filter out dead elements
-        $pool = $pool.filter(function() {
-            // elements removed from DOM shouldn't be polled anymore
-            return $.contains(document.documentElement, this);
-        });
-
-        $source = $source.filter(function() {
-            // elements removed from DOM shouldn't be polled anymore
-            return $.contains(document.documentElement, this);
-        });
-
-        $source.each(function() {
-            addToPolling(this);
-        });
+        $source = $source
+            .filter(function() {
+                // elements removed from DOM shouldn't be polled anymore
+                return $.contains(document.documentElement, this);
+            })
+            .each(function() {
+                addToPolling(this);
+            });
 
         // schedule next run
         cacheTimeoutId = setTimeout(refreshCache, cfg.cacheTimeout);
@@ -109,13 +105,6 @@
     function addToPolling(el) {
         // add elements to the polling list, jQuery cares for the uniqueness
         $pool = $pool.add($getPolled(el));
-    }
-
-    function increaseListenerCount(el) {
-        $getPolled(el).each(function() {
-            var trackedNum = $.data(this, isTracked) || 0;
-            $.data(this, isTracked, trackedNum + 1);
-        });
     }
 
     // see which elements are being polled for this element.
@@ -163,7 +152,6 @@
         },
 
         add: function() {
-            increaseListenerCount(this);
             // start polling
             timeoutId || poll();
             // start refreshing cache periodically
@@ -171,26 +159,14 @@
         },
 
         remove: function() {
-            var $trackedElems = $getPolled(this);
-
-            // for each polled element, decrease the number of listeners interested in its polling
-            $trackedElems.each(function() {
-                var currentTrackedNum = $.data(this, isTracked) || 0;
-                $.data(this, isTracked, Math.max(currentTrackedNum - 1, 0));
-            });
-
-            $pool = $pool.filter(function() {
-                // element must stay if there is at least one listener interested
-                return $.data(this, isTracked) > 0;
-            });
+            clearTimeout(cacheTimeoutId);
+            refreshCache();
         },
 
         teardown: function() {
             $source = $source.not(this);
             // this is the last event handler for this element, so we remove .data() properties
-            $(this)
-                .removeData(valueCache)
-                .removeData(isTracked);
+            $(this).removeData(valueCache);
         }
     };
 
